@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión | SISMOC — Transportes El Cumbe S.A.C.</title>
+
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap 5 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+
+    <style>
+        :root {
+            --cumbe-orange: #e87400;
+            --cumbe-orange-hover: #ff850a;
+            --cumbe-orange-dark: #b85c00;
+            --bg-dark: #070d19;
+            --bg-card: #0d1726;
+            --bg-card-header: #122137;
+            --border-color: rgba(255, 255, 255, 0.09);
+            --border-highlight: rgba(232, 116, 0, 0.45);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-cyan: #06b6d4;
+            --accent-emerald: #10b981;
+            --accent-purple: #8b5cf6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(232, 116, 0, 0.12) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.08) 0px, transparent 50%),
+                radial-gradient(at 50% 50%, rgba(139, 92, 246, 0.05) 0px, transparent 60%);
+            color: var(--text-main);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 980px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(232, 116, 0, 0.1);
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+
+        @media (max-width: 860px) {
+            .login-container {
+                grid-template-columns: 1fr;
+                max-width: 480px;
+            }
+            .login-left-banner {
+                display: none;
+            }
+        }
+
+        /* Banner Izquierdo - Identidad Institucional */
+        .login-left-banner {
+            background: linear-gradient(145deg, #101c30 0%, #09111e 100%);
+            padding: 44px 36px;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .login-left-banner::before {
+            content: '';
+            position: absolute;
+            top: -40px;
+            right: -40px;
+            width: 180px;
+            height: 180px;
+            background: radial-gradient(circle, rgba(232, 116, 0, 0.25) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .brand-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 28px;
+        }
+
+        .brand-logo-img {
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
+            background: white;
+            padding: 5px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            object-fit: contain;
+        }
+
+        .brand-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.45rem;
+            font-weight: 800;
+            color: #ffffff;
+            line-height: 1.1;
+        }
+
+        .brand-sub {
+            font-size: 0.78rem;
+            color: var(--cumbe-orange);
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .corp-desc {
+            font-size: 0.88rem;
+            line-height: 1.6;
+            color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .feature-icon-badge {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            background: rgba(232, 116, 0, 0.15);
+            color: var(--cumbe-orange);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+            border: 1px solid rgba(232, 116, 0, 0.25);
+        }
+
+        .feature-text h6 {
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: #fff;
+            margin: 0 0 2px 0;
+        }
+
+        .feature-text p {
+            font-size: 0.76rem;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        .left-footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Lado Derecho - Formulario de Acceso */
+        .login-right-form {
+            padding: 44px 38px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .form-heading h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.65rem;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 6px;
+        }
+
+        .form-heading p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+
+        .form-label-custom {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #cbd5e1;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .input-group-custom {
+            position: relative;
+            margin-bottom: 18px;
+        }
+
+        .input-icon-prefix {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 1rem;
+            pointer-events: none;
+        }
+
+        .form-control-custom {
+            width: 100%;
+            padding: 12px 14px 12px 42px;
+            background: #091220;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 0.92rem;
+            transition: all 0.2s ease;
+        }
+
+        .form-control-custom:focus {
+            outline: none;
+            border-color: var(--cumbe-orange);
+            background: #0d192c;
+            box-shadow: 0 0 0 3px rgba(232, 116, 0, 0.2);
+            color: #fff;
+        }
+
+        .toggle-password-btn {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 4px;
+        }
+
+        .toggle-password-btn:hover {
+            color: #fff;
+        }
+
+        .btn-cumbe-submit {
+            width: 100%;
+            padding: 13px;
+            background: linear-gradient(135deg, var(--cumbe-orange) 0%, #ff850a 100%);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.02rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 18px rgba(232, 116, 0, 0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-cumbe-submit:hover {
+            background: linear-gradient(135deg, #ff850a 0%, #ff9829 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 22px rgba(232, 116, 0, 0.45);
+        }
+
+        /* Selector Rápido de Roles (Demostración y Evaluación) */
+        .quick-roles-panel {
+            margin-top: 24px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px dashed rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+        }
+
+        .quick-roles-title {
+            font-size: 0.76rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--cumbe-orange);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .roles-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 8px;
+        }
+
+        .role-chip-btn {
+            background: #111e33;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 8px 10px;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            color: var(--text-main);
+        }
+
+        .role-chip-btn:hover {
+            border-color: var(--cumbe-orange);
+            background: #192a47;
+            transform: translateY(-1px);
+        }
+
+        .role-chip-btn.active {
+            border-color: var(--cumbe-orange);
+            background: rgba(232, 116, 0, 0.15);
+            box-shadow: 0 0 0 1px var(--cumbe-orange);
+        }
+
+        .role-chip-title {
+            font-size: 0.74rem;
+            font-weight: 700;
+            display: block;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .role-chip-user {
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            display: block;
+        }
+
+        /* Alertas de Mensajes */
+        .custom-alert {
+            padding: 12px 14px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            line-height: 1.4;
+        }
+
+        .alert-error-custom {
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            color: #fca5a5;
+        }
+
+        .alert-success-custom {
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            color: #6ee7b7;
+        }
+
+        .alert-info-custom {
+            background: rgba(6, 182, 212, 0.12);
+            border: 1px solid rgba(6, 182, 212, 0.35);
+            color: #67e8f9;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-container">
+        <!-- Lado Izquierdo: Identidad Corporativa -->
+        <div class="login-left-banner">
+            <div>
+                <div class="brand-header">
+                    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRwTYiflwR087rJ8I_PTnxf22NcIscgYLRpcA&s" 
+                         class="brand-logo-img" alt="El Cumbe Logo">
+                    <div>
+                        <div class="brand-title">EL CUMBE</div>
+                        <div class="brand-sub">SISMOC • v1.0 2026-II</div>
+                    </div>
+                </div>
+
+                <p class="corp-desc">
+                    Plataforma Integral de Gestión Operativa, Asistencia Biométrica ZKTeco en Tiempo Real, Vueltas de Choferes SUTRAN y Flota Interprovincial.
+                </p>
+
+                <div class="feature-item">
+                    <div class="feature-icon-badge">⚡</div>
+                    <div class="feature-text">
+                        <h6>Reloj ZKTeco TCP/IP</h6>
+                        <p>Marcaciones en vivo y auditoría laboral D.L. 728.</p>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon-badge">🚌</div>
+                    <div class="feature-text">
+                        <h6>Seguridad Vial SUTRAN</h6>
+                        <p>Límite de 5h diurnas / 4h nocturnas y descanso de 8h.</p>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon-badge">🛡️</div>
+                    <div class="feature-text">
+                        <h6>Matriz de 7 Roles RBAC</h6>
+                        <p>Acceso segmentado según competencias laborales.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="left-footer">
+                <strong>Empresa de Transportes El Cumbe S.A.C.</strong><br>
+                RUC: 20480397731 • Prácticas Pre Profesionales USS<br>
+                Desarrollado por: Nilson Silupu (Admin TI)
+            </div>
+        </div>
+
+        <!-- Lado Derecho: Formulario de Login -->
+        <div class="login-right-form">
+            <div class="form-heading">
+                <h3>Iniciar Sesión</h3>
+                <p>Ingrese sus credenciales de colaborador para acceder al sistema.</p>
+            </div>
+
+            <!-- Mensajes Flash de Django -->
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="custom-alert {% if message.tags == 'error' %}alert-error-custom{% elif message.tags == 'success' %}alert-success-custom{% else %}alert-info-custom{% endif %}">
+                        <span>
+                            {% if message.tags == 'error' %}⚠️{% elif message.tags == 'success' %}✓{% else %}ℹ️{% endif %}
+                        </span>
+                        <span>{{ message }}</span>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="POST" action="{% url 'login' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.GET.next|default:'' }}">
+
+                <div class="input-group-custom">
+                    <label class="form-label-custom" for="usernameInput">
+                        <span>DNI (8 dígitos) o Usuario</span>
+                        <span style="font-size: 0.72rem; color: var(--text-muted);">Soporta DNI o Username</span>
+                    </label>
+                    <div style="position: relative;">
+                        <span class="input-icon-prefix">🪪</span>
+                        <input type="text" 
+                               name="username" 
+                               id="usernameInput" 
+                               class="form-control-custom" 
+                               placeholder="Ej: 48039773 o admin" 
+                               required 
+                               autocomplete="username"
+                               autofocus>
+                    </div>
+                </div>
+
+                <div class="input-group-custom">
+                    <label class="form-label-custom" for="passwordInput">
+                        <span>Contraseña</span>
+                    </label>
+                    <div style="position: relative;">
+                        <span class="input-icon-prefix">🔒</span>
+                        <input type="password" 
+                               name="password" 
+                               id="passwordInput" 
+                               class="form-control-custom" 
+                               placeholder="••••••••" 
+                               required 
+                               autocomplete="current-password">
+                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility()" title="Mostrar/Ocultar contraseña">
+                            <span id="eyeIcon">👁️</span>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-cumbe-submit">
+                    <span>Ingresar al Sistema SISMOC</span>
+                    <span>→</span>
+                </button>
+            </form>
+
+            <!-- Acceso Rápido por Rol Oficial (Para pruebas del tribunal y evaluador) -->
+            <div class="quick-roles-panel">
+                <div class="quick-roles-title">
+                    <span>⚡ Acceso Rápido por Rol (7 Roles)</span>
+                    <span style="font-size: 0.65rem; color: var(--text-muted); text-transform: none;">Contraseña: cumbe2026</span>
+                </div>
+                <div class="roles-grid">
+                    <button type="button" class="role-chip-btn" onclick="seleccionarRol('admin', 'cumbe2026', this)">
+                        <span class="role-chip-title">⚙️ Admin TI</span>
+                        <span class="role-chip-user">Nilson S. (00000000)</span>
+                    </button>
+                    <button type="button" class="role-chip-btn" onclick="seleccionarRol('yaneli.terrones', 'cumbe2026', this)">
+                        <span class="role-chip-title">📊 Contadora</span>
+                        <span class="role-chip-user">Yaneli T. (48039773)</span>
+                    </button>
+                    <button type="button" class="role-chip-btn" onclick="seleccionarRol('gerente.cumbe', 'cumbe2026', this)">
+                        <span class="role-chip-title">👑 Gerente Gral</span>
+                        <span class="role-chip-user">Segundo (16548920)</span>
+                    </button>
+                    <button type="button" class="role-chip-btn" onclick="seleccionarRol('carlos.condor', 'cumbe2026', this)">
+                        <span class="role-chip-title">🚌 Conductor</span>
+                        <span class="role-chip-user">Carlos C. (45892147)</span>
+                    </button>
+                    <button type="button" class="role-chip-btn" onclick="seleccionarRol('miguel.embarque', 'cumbe2026', this)">
+                        <span class="role-chip-title">📱 Embarque</span>
+                        <span class="role-chip-user">Miguel A. (71234567)</span>
+                    </button>
+                    <button type="button" class="role-chip-btn" onclick="seleccionarRol('ana.boleteria', 'cumbe2026', this)">
+                        <span class="role-chip-title">🎟️ Boletería</span>
+                        <span class="role-chip-user">Ana M. (72345678)</span>
+                    </button>
+                    <button type="button" class="role-chip-btn" onclick="seleccionarRol('pedro.asistente', 'cumbe2026', this)">
+                        <span class="role-chip-title">👔 Administrativo</span>
+                        <span class="role-chip-user">Pedro M. (73456789)</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function togglePasswordVisibility() {
+            const passInput = document.getElementById('passwordInput');
+            const eyeIcon = document.getElementById('eyeIcon');
+            if (passInput.type === 'password') {
+                passInput.type = 'text';
+                eyeIcon.innerText = '🙈';
+            } else {
+                passInput.type = 'password';
+                eyeIcon.innerText = '👁️';
+            }
+        }
+
+        function seleccionarRol(username, password, btnElement) {
+            document.getElementById('usernameInput').value = username;
+            document.getElementById('passwordInput').value = password;
+
+            // Marcar chip activo visualmente
+            document.querySelectorAll('.role-chip-btn').forEach(b => b.classList.remove('active'));
+            if (btnElement) {
+                btnElement.classList.add('active');
+            }
+
+            // Efecto suave de foco
+            document.getElementById('usernameInput').focus();
+        }
+    </script>
+</body>
+</html>

@@ -157,3 +157,11 @@ ZKTECO_CONFIG = {
     "PORT": int(os.getenv("ZKTECO_PORT", "4370")),
     "TIMEOUT": 5,  # Segundos de espera para conexión
 }
+
+
+# ==============================================================================
+# AUTENTICACIÓN Y REDIRECCIÓN DE SESIÓN
+# ==============================================================================
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/login/'
