@@ -234,6 +234,18 @@ class ResumenAsistenciaDiaria(models.Model):
         verbose_name="Total Numérico de Vueltas",
     )
 
+    turno_aplicado = models.ForeignKey(
+        TurnoHorario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resumenes",
+        verbose_name="Turno Aplicado en la Jornada",
+    )
+    descanso_sutran_cumplido = models.BooleanField(
+        default=True,
+        verbose_name="Cumple Descanso SUTRAN (Minimo 8h)",
+    )
     estado = models.CharField(
         max_length=25,
         choices=EstadoAsistencia.choices,
