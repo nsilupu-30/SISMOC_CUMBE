@@ -37,6 +37,7 @@ class TurnoHorario(models.Model):
     activo = models.BooleanField(default=True, verbose_name="Turno Activo")
 
     class Meta:
+        db_table = "asistencia_turno"
         verbose_name = "Turno y Horario Laboral"
         verbose_name_plural = "Turnos y Horarios Laborales"
         ordering = ["nombre"]
@@ -135,12 +136,21 @@ class MarcacionBiometrica(models.Model):
         default=True,
         verbose_name="Marcación Válida",
     )
+    carga_origen = models.ForeignKey(
+        "CargaArchivoAsistencia",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="marcaciones",
+        verbose_name="Lote de Carga Excel",
+    )
     fecha_registro_sistema = models.DateTimeField(
         auto_now_add=True,
         verbose_name="Fecha de Registro en Servidor",
     )
 
     class Meta:
+        db_table = "asistencia_marcacion"
         verbose_name = "Marcación Biométrica"
         verbose_name_plural = "Marcaciones Biométricas (Logs ZKTeco / App)"
         ordering = ["-fecha_hora"]
@@ -241,6 +251,7 @@ class ResumenAsistenciaDiaria(models.Model):
     )
 
     class Meta:
+        db_table = "asistencia_resumen"
         verbose_name = "Resumen de Asistencia Diaria"
         verbose_name_plural = "Resúmenes de Asistencia Diaria (Planilla)"
         ordering = ["-fecha", "usuario__last_name"]
@@ -326,6 +337,7 @@ class CargaArchivoAsistencia(models.Model):
     )
 
     class Meta:
+        db_table = "asistencia_carga"
         verbose_name = "Auditoría de Carga Excel ZKTeco"
         verbose_name_plural = "Historial de Cargas Excel ZKTeco"
         ordering = ["-fecha_subida"]

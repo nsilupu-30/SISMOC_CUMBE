@@ -111,6 +111,14 @@ class Usuario(AbstractUser):
     )
 
     # Código ID en el Reloj Biométrico ZKTeco (Enroll Number)
+    turno = models.ForeignKey(
+        "asistencia.TurnoHorario",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="usuarios",
+        verbose_name="Turno Habitual Asignado",
+    )
     zkteco_user_id = models.IntegerField(
         blank=True,
         null=True,
