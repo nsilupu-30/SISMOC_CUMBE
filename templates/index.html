@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -57,13 +58,121 @@
             height: 100vh;
             background: var(--cumbe-orange);
             color: white;
-            padding: 20px 0 30px 0;
+            padding: 20px 0 0 0;
             box-shadow: 4px 0 20px rgba(0, 0, 0, 0.4);
             z-index: 1000;
-            overflow-y: auto;
+            overflow: hidden;
             transition: transform 0.3s ease;
             display: flex;
             flex-direction: column;
+        }
+
+        .menu-list {
+            list-style: none;
+            padding: 4px 10px 10px 10px;
+            margin: 0;
+            flex: 1 1 auto;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .menu-list::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .menu-list::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.08);
+        }
+
+        .menu-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.28);
+            border-radius: 4px;
+        }
+
+        .sidebar-footer {
+            flex-shrink: 0;
+            margin-top: auto;
+            padding: 12px 14px 14px 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.22);
+            background: rgba(0, 0, 0, 0.18);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .user-badge-sidebar {
+            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.22);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .user-avatar-circle {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: white;
+            color: var(--cumbe-orange);
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            flex-shrink: 0;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+        }
+
+        .user-badge-info {
+            font-size: 0.8rem;
+            line-height: 1.25;
+            overflow: hidden;
+        }
+
+        .user-badge-name {
+            font-weight: 700;
+            color: #ffffff;
+            font-size: 0.84rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .user-badge-role {
+            font-size: 0.72rem;
+            color: #ffe8cc;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .btn-sidebar-logout {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 9px 12px;
+            background: rgba(0, 0, 0, 0.32);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            border-radius: 10px;
+            text-decoration: none;
+            font-size: 0.84rem;
+            font-weight: 700;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .btn-sidebar-logout:hover {
+            background: #dc2626 !important;
+            border-color: #ef4444 !important;
+            color: #ffffff !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 14px rgba(220, 38, 38, 0.45);
         }
 
         .sidebar .brand {
@@ -494,61 +603,9 @@
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
         }
     
-        .sidebar-footer {
-            margin-top: auto;
-            padding: 16px;
-            border-top: 1px solid rgba(255, 255, 255, 0.15);
-            background: rgba(0, 0, 0, 0.12);
-        }
 
-        .btn-sidebar-logout {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            width: 100%;
-            padding: 11px 14px;
-            background: rgba(0, 0, 0, 0.28);
-            color: #ffffff;
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            border-radius: 10px;
-            text-decoration: none;
-            font-size: 0.88rem;
-            font-weight: 700;
-            transition: all 0.2s ease;
-        }
-
-        .btn-sidebar-logout:hover {
-            background: #dc2626 !important;
-            border-color: #ef4444 !important;
-            color: #ffffff !important;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 16px rgba(220, 38, 38, 0.45);
-        }
-
-        .btn-top-logout {
-            background: rgba(239, 68, 68, 0.15);
-            border: 1px solid rgba(239, 68, 68, 0.4);
-            color: #fca5a5;
-            padding: 8px 16px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-size: 0.85rem;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.2s ease;
-        }
-
-        .btn-top-logout:hover {
-            background: #dc2626;
-            color: #ffffff;
-            border-color: #ef4444;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
-        }
     </style>
+    <link rel="stylesheet" href="{% static 'asistencia.css' %}">
 </head>
 <body>
 
@@ -562,25 +619,6 @@
             <div>
                 <div class="brand-title">EL CUMBE</div>
                 <div class="brand-sub">SISMOC v1.0 • 2026-II</div>
-            </div>
-        </div>
-
-        <!-- Perfil del Colaborador / Usuario Activo (7 Roles) -->
-        <div class="user-badge-sidebar">
-            <div class="user-avatar-circle">
-                {% if request.user.first_name and request.user.last_name %}
-                    {{ request.user.first_name|slice:":1"|upper }}{{ request.user.last_name|slice:":1"|upper }}
-                {% else %}
-                    {{ request.user.username|slice:":2"|upper }}
-                {% endif %}
-            </div>
-            <div class="user-badge-info" style="overflow: hidden;">
-                <div class="user-badge-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ request.user.nombre_completo }}">
-                    {{ request.user.nombre_completo }}
-                </div>
-                <div class="user-badge-role" style="font-size: 0.72rem; opacity: 0.95; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    {{ request.user.get_rol_display }}
-                </div>
             </div>
         </div>
 
@@ -645,11 +683,28 @@
                 </a>
             </li>
         </ul>
-
-        <!-- Boton de Cerrar Sesion Institucional en el Sidebar -->
+        <!-- Pie del Sidebar: Perfil de Usuario y Cerrar Sesion juntos abajo -->
         <div class="sidebar-footer">
-            <a href="{% url 'logout' %}" class="btn-sidebar-logout" title="Cerrar Sesion de {{ request.user.nombre_completo }}">
-                <span>🚪</span>
+            <div class="user-badge-sidebar">
+                <div class="user-avatar-circle">
+                    {% if request.user.first_name and request.user.last_name %}
+                        {{ request.user.first_name|slice:":1"|upper }}{{ request.user.last_name|slice:":1"|upper }}
+                    {% else %}
+                        {{ request.user.username|slice:":2"|upper }}
+                    {% endif %}
+                </div>
+                <div class="user-badge-info">
+                    <div class="user-badge-name" title="{{ request.user.nombre_completo }}">
+                        {{ request.user.nombre_completo }}
+                    </div>
+                    <div class="user-badge-role">
+                        {{ request.user.get_rol_display }}
+                    </div>
+                </div>
+            </div>
+
+            <a href="{% url 'logout' %}" class="btn-sidebar-logout" title="Cerrar sesión de {{ request.user.nombre_completo }}">
+                <span style="font-size: 1.05rem;">🚪</span>
                 <span>Cerrar Sesión</span>
             </a>
         </div>
@@ -667,16 +722,13 @@
             </div>
 
             <div class="top-actions">
-                <div class="badge-huellero" id="zkPulseBadge">
-                    <span class="pulse-indicator"></span>
-                    <span>ZKTeco <strong>{{ info_huellero.dispositivo_ip }}:{{ info_huellero.dispositivo_puerto }} (EN LÍNEA)</strong></span>
+                <div class="badge-huellero" id="estadoHuellero" id="zkPulseBadge">
+                    <span>ZKTeco <strong>{{ info_huellero.dispositivo_ip }}:{{ info_huellero.dispositivo_puerto }} · {{ info_huellero.estado_dispositivo }}</strong></span>
                 </div>
                 <button class="btn-cumbe" onclick="abrirModal()">
                     📱 Marcar Presencia
                 </button>
-                <a href="{% url 'logout' %}" class="btn-top-logout" title="Cerrar sesion de {{ request.user.nombre_completo }}">
-                    🚪 Cerrar Sesión
-                </a>
+
             </div>
         </header>
 
@@ -695,32 +747,33 @@
             </div>
         {% endif %}
 
+        <p class="ayuda">Periodo de los indicadores de horas y revisión: <strong>{{ filtros.desde }} al {{ filtros.hasta }}</strong>. <a href="?vista=asistencia" style="color:#7dd3fc">Consultar otro periodo</a></p>
         <!-- Tarjetas KPI Resumen -->
         <div class="kpi-grid">
             <div class="kpi-box">
                 <div class="kpi-top-bar bar-orange"></div>
-                <div class="kpi-title">Personal Presente Hoy</div>
+                <div class="kpi-title">Con marcación hoy</div>
                 <div class="kpi-value" id="kpiPresentes">{{ info_huellero.total_presentes_hoy }} <span style="font-size: 1rem; color: #ffa94d;">trabajadores</span></div>
-                <div class="kpi-sub">Sincronizado vía TCP/IP en tiempo real</div>
+                <div class="kpi-sub">Personas con registros guardados hoy</div>
             </div>
 
             <div class="kpi-box">
                 <div class="kpi-top-bar bar-emerald"></div>
-                <div class="kpi-title">Horas Extras Acumuladas</div>
-                <div class="kpi-value">15.00 <span style="font-size: 1rem; color: #34d399;">hrs (25% y 35%)</span></div>
-                <div class="kpi-sub">Auditoría contable D.L. 728 aprobada</div>
+                <div class="kpi-title">Horas extras del periodo</div>
+                <div class="kpi-value">{{ totales_asistencia.horas_extras_25|floatformat:2 }} <span style="font-size: 1rem; color: #34d399;">h al 25 %</span></div>
+                <div class="kpi-sub">{{ totales_asistencia.horas_extras_35|floatformat:2 }} h al 35 % · Incluye pendientes de revisión</div>
             </div>
 
             <div class="kpi-box">
                 <div class="kpi-top-bar bar-cyan"></div>
-                <div class="kpi-title">Servicios de Choferes</div>
-                <div class="kpi-value">10 <span style="font-size: 1rem; color: #38bdf8;">vueltas</span></div>
-                <div class="kpi-sub">Conteo automático sin error #¿NOMBRE?</div>
+                <div class="kpi-title">Jornadas por revisar</div>
+                <div class="kpi-value">{{ conteos_revision.PENDIENTE|add:conteos_revision.OBSERVADO }} <span style="font-size: 1rem; color: #38bdf8;">jornadas</span></div>
+                <div class="kpi-sub">{{ conteos_revision.APROBADO }} de {{ total_jornadas }} aprobadas · {{ conteos_revision.OBSERVADO }} observadas</div>
             </div>
 
             <div class="kpi-box">
                 <div class="kpi-top-bar bar-purple"></div>
-                <div class="kpi-title">Colaboradores en Planilla</div>
+                <div class="kpi-title">Personal activo registrado</div>
                 <div class="kpi-value">{{ total_usuarios }} <span style="font-size: 1rem; color: #c084fc;">activos</span></div>
                 <div class="kpi-sub">Distribuido en los 7 Roles RBAC</div>
             </div>
@@ -734,13 +787,14 @@
                 <div class="panel-header-custom">
                     <div class="panel-title-text">
                         <span>⚡</span>
-                        <span>Marcaciones Registradas Hoy — Huellero Biométrico ZKTeco ({{ info_huellero.fecha_consulta }})</span>
+                        <span>Marcaciones guardadas hoy ({{ info_huellero.fecha_consulta }})</span>
                     </div>
-                    <button class="btn-cumbe" onclick="sincronizarZKTeco()" id="btnSync">
-                        🔄 Sincronizar Huellero en Vivo
-                    </button>
+                    {% if puede_gestionar %}<button class="btn-cumbe" onclick="sincronizarZKTeco()" id="btnSync">
+                        Consultar conexión del equipo
+                    </button>{% endif %}
                 </div>
 
+                <p class="ayuda" id="detalleHuellero">Última comprobación: {{ info_huellero.ultima_comprobacion }}. Última sincronización: {{ info_huellero.ultima_sincronizacion }}. {{ info_huellero.mensaje }}</p>
                 <div class="table-responsive">
                     <table class="custom-dark-table" id="tablaZkLive">
                         <thead>
@@ -768,7 +822,7 @@
                             {% empty %}
                             <tr>
                                 <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 25px;">
-                                    Presione "Sincronizar Huellero en Vivo" para descargar los registros de presencia del día.
+                                    No hay marcaciones guardadas para hoy.
                                 </td>
                             </tr>
                             {% endfor %}
@@ -782,74 +836,7 @@
              SECCION 2: ASISTENCIA & HORAS EXTRAS (D.L. 728)
         =============================================================== -->
         <div id="view-asistencia" class="view-section">
-            <div class="content-panel">
-                <div class="panel-header-custom">
-                    <div class="panel-title-text">
-                        <span>📊</span>
-                        <span>Cálculo Legal de Planillas y Horas Extras (D.L. 728 — CPC. Yaneli Terrones)</span>
-                    </div>
-                    <span class="status-pill pill-orange">Normativa: 2h al 25% | >2h al 35% | Nocturna 22:00-06:00</span>
-                </div>
-
-                <div class="table-responsive">
-                    <table class="custom-dark-table">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Colaborador</th>
-                                <th>Entrada</th>
-                                <th>Salida</th>
-                                <th>Tardanza</th>
-                                <th>Horas Trab.</th>
-                                <th>HE 25%</th>
-                                <th>HE 35%</th>
-                                <th>Estado</th>
-                                <th>Auditoría Contable</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for r in resumenes_recientes %}
-                            <tr>
-                                <td>{{ r.fecha|date:"d/m/Y" }}</td>
-                                <td><strong>{{ r.usuario.nombre_completo }}</strong></td>
-                                <td>{{ r.primera_entrada|default:"--" }}</td>
-                                <td>{{ r.ultima_salida|default:"--" }}</td>
-                                <td>
-                                    {% if r.minutos_tardanza > 0 %}
-                                    <span class="status-pill pill-rose">{{ r.minutos_tardanza }} min</span>
-                                    {% else %}
-                                    <span style="color: var(--text-muted);">0 min</span>
-                                    {% endif %}
-                                </td>
-                                <td><strong>{{ r.horas_trabajadas }} h</strong></td>
-                                <td>
-                                    {% if r.horas_extras_25 > 0 %}
-                                    <span class="status-pill pill-emerald">+{{ r.horas_extras_25 }} h</span>
-                                    {% else %}<span style="color: var(--text-muted);">0.00</span>{% endif %}
-                                </td>
-                                <td>
-                                    {% if r.horas_extras_35 > 0 %}
-                                    <span class="status-pill pill-orange">+{{ r.horas_extras_35 }} h</span>
-                                    {% else %}<span style="color: var(--text-muted);">0.00</span>{% endif %}
-                                </td>
-                                <td>
-                                    <span class="status-pill {% if r.estado == 'ASISTIO' %}pill-emerald{% elif r.estado == 'TARDANZA' %}pill-rose{% else %}pill-cyan{% endif %}">
-                                        {{ r.get_estado_display }}
-                                    </span>
-                                </td>
-                                <td>
-                                    {% if r.verificado_contabilidad %}
-                                    <span class="status-pill pill-emerald">✓ Aprobado CPC</span>
-                                    {% else %}
-                                    <span class="status-pill pill-purple">Pendiente</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            {% include "asistencia/panel.html" %}
         </div>
 
         <!-- ===============================================================
@@ -929,13 +916,13 @@
                 <div class="excel-drop-zone" onclick="document.getElementById('excelInput').click()">
                     <div style="font-size: 2.8rem; margin-bottom: 10px;">📊</div>
                     <h4 style="font-family: 'Outfit', sans-serif; font-weight: 700; margin-bottom: 6px;">
-                        Subir Archivo de Asistencia ZKTeco (.xlsx / .csv)
+                        Subir Archivo de Asistencia ZKTeco (.xlsx / .xls)
                     </h4>
                     <p style="color: var(--text-muted); font-size: 0.88rem; max-width: 600px; margin: 0 auto 15px auto;">
-                        Procesa libros como <strong>ASISTENCIA AGOSTO 2026.xlsx</strong> con más de 50 pestañas, calculando automáticamente tardanzas, horas extras (25%/35%) y vueltas de choferes en segundos.
+                        Cargue un archivo compatible con el importador. Revise los resultados antes de aprobarlos; los libros con formatos mixtos requieren validación de hojas, identidades y jornadas.
                     </p>
                     <button class="btn-cumbe" type="button">Seleccionar Archivo de mi PC</button>
-                    <input type="file" id="excelInput" accept=".xlsx,.xls,.csv" style="display: none;" onchange="procesarExcel(this.files[0])">
+                    <input type="file" id="excelInput" accept=".xlsx,.xls" style="display: none;" onchange="procesarExcel(this.files[0])">
                 </div>
 
                 <div id="resultadoExcelBox" style="margin-top: 20px; display: none;" class="content-panel">
@@ -1129,10 +1116,7 @@
             <div class="mb-3">
                 <label class="form-label" style="font-size: 0.85rem; color: var(--text-muted);">Colaborador / DNI:</label>
                 <select class="form-select bg-dark text-white border-secondary" id="dniSelect">
-                    <option value="48039773">48039773 — Yaneli Madeleyne Terrones (Contadora General)</option>
-                    <option value="45892147">45892147 — Carlos Alberto Cóndor (Conductor)</option>
-                    <option value="73456789">73456789 — Pedro Morales Cieza (Administrativo)</option>
-                    <option value="72345678">72345678 — Ana María Torres (Boletería)</option>
+                    {% for u in usuarios_asistencia %}<option value="{{ u.dni }}">{{ u.nombre_completo }} · {{ u.dni }}</option>{% endfor %}
                 </select>
             </div>
 
@@ -1149,8 +1133,7 @@
             <div class="mb-4">
                 <label class="form-label" style="font-size: 0.85rem; color: var(--text-muted);">Canal de Transmisión:</label>
                 <select class="form-select bg-dark text-white border-secondary" id="origenSelect">
-                    <option value="APP_MOVIL_GPS">📱 App Móvil (Reconocimiento Facial + GPS)</option>
-                    <option value="ZKTECO_EN_LINEA">⚡ Huellero Biométrico ZKTeco Físico (TCP/IP)</option>
+                    <option value="KIOSKO_PIN">Registro web con DNI (sin validación biométrica)</option>
                 </select>
             </div>
 
@@ -1167,7 +1150,8 @@
             document.querySelectorAll('.menu-link').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active'));
 
-            event.currentTarget.classList.add('active');
+            const enlace = Array.from(document.querySelectorAll('.menu-link')).find(btn => (btn.getAttribute('onclick') || '').includes("'" + seccionId + "'"));
+            if (enlace) enlace.classList.add('active');
             const target = document.getElementById('view-' + seccionId);
             if (target) {
                 target.classList.add('active');
@@ -1184,36 +1168,20 @@
 
         async function sincronizarZKTeco() {
             const btn = document.getElementById('btnSync');
-            btn.innerHTML = '🔄 Consultando Huellero...';
             btn.disabled = true;
-
+            btn.textContent = 'Comprobando conexión…';
             try {
-                const res = await fetch('/api/asistencia/tiempo-real');
-                const data = await res.json();
-
-                document.getElementById('kpiPresentes').innerHTML = data.total_presentes_hoy + ' <span style="font-size: 1rem; color: #ffa94d;">trabajadores</span>';
-
-                const tbody = document.querySelector('#tablaZkLive tbody');
-                tbody.innerHTML = '';
-                data.colaboradores_presentes.forEach(c => {
-                    tbody.innerHTML += `
-                        <tr>
-                            <td><strong>${c.dni}</strong></td>
-                            <td>${c.nombre}</td>
-                            <td><span class="status-pill pill-cyan">${c.rol_display}</span></td>
-                            <td>${c.agencia_sede}</td>
-                            <td><strong>${c.primera_marcacion}</strong></td>
-                            <td><span class="status-pill pill-purple">${c.origen}</span></td>
-                            <td><span class="status-pill pill-emerald">${c.estado_asistencia}</span></td>
-                        </tr>
-                    `;
+                const res = await fetch('{% url "consultar_huellero" %}', {
+                    method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' }
                 });
-                alert('✓ Sincronización exitosa con reloj biométrico ZKTeco.');
+                if (!res.ok) throw new Error('No se pudo consultar el equipo. Revise su sesión y permisos.');
+                const data = await res.json();
+                document.getElementById('estadoHuellero').textContent = 'ZKTeco · ' + data.estado_dispositivo;
+                document.getElementById('detalleHuellero').textContent = 'Última comprobación: ' + data.ultima_comprobacion + '. Última sincronización: ' + data.ultima_sincronizacion + '. ' + data.mensaje;
             } catch (err) {
-                alert('Error al consultar huellero: ' + err);
+                document.getElementById('detalleHuellero').textContent = err.message;
             } finally {
-                btn.innerHTML = '🔄 Sincronizar Huellero en Vivo';
-                btn.disabled = false;
+                btn.textContent = 'Consultar conexión del equipo'; btn.disabled = false;
             }
         }
 
@@ -1223,15 +1191,13 @@
             const origen = document.getElementById('origenSelect').value;
 
             try {
-                const res = await fetch('/api/asistencia/marcar', {
+                const res = await fetch('{% url "marcar_web" %}', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
                     body: JSON.stringify({
                         dni: dni,
                         tipo_evento: tipo,
-                        origen: origen,
-                        latitud: -6.77137,
-                        longitud: -79.84088
+                        origen: origen
                     })
                 });
                 if (res.ok) {
@@ -1239,7 +1205,7 @@
                     cerrarModal();
                     window.location.reload();
                 } else {
-                    alert('Error al registrar marcación.');
+                    const error = await res.json(); alert(error.detail || 'No se pudo registrar la marcación.');
                 }
             } catch (e) {
                 alert('Error de conexión: ' + e);
@@ -1256,35 +1222,21 @@
             const formData = new FormData();
             formData.append('file', file);
 
-            // Login automático para token
-            const auth = await fetch('/api/auth/login', {
+            const res = await fetch('{% url "importar_excel_web" %}', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username_or_dni: 'yaneli.terrones', password: 'cumbe2026' })
-            });
-            const authData = await auth.json();
-
-            const res = await fetch('/api/asistencia/subir-excel', {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + authData.access_token },
+                headers: { 'X-CSRFToken': '{{ csrf_token }}' },
                 body: formData
             });
 
             if (res.ok) {
                 const data = await res.json();
-                box.innerHTML = `
-                    <div style="color: #34d399; font-weight: 700; font-size: 1.15rem; margin-bottom: 8px;">
-                        ✓ Archivo procesado exitosamente por Pandas
-                    </div>
-                    <p style="margin: 0 0 4px 0;"><strong>Archivo:</strong> ${data.archivo}</p>
-                    <p style="margin: 0 0 4px 0;"><strong>Filas Procesadas:</strong> ${data.filas_procesadas} | <strong>Colaboradores Identificados:</strong> ${data.empleados_identificados}</p>
-                    <p style="margin: 0 0 4px 0;"><strong>Horas Extras 25%:</strong> ${data.total_he_25} h | <strong>Horas Extras 35%:</strong> ${data.total_he_35} h</p>
-                    <p style="margin: 0;"><strong>Vueltas de Choferes:</strong> ${data.total_vueltas_choferes} servicios (Sin error #¿NOMBRE?)</p>
-                `;
+                box.textContent = 'Archivo: ' + data.archivo + '. Filas procesadas: ' + data.filas_procesadas + '. Trabajadores identificados: ' + data.empleados_identificados + '. Revise las jornadas antes de aprobarlas.';
             } else {
-                box.innerHTML = '<p style="color: #fb7185;">❌ Error al procesar el archivo Excel.</p>';
+                const error = await res.json(); box.textContent = error.detail || 'Error al procesar el archivo Excel.';
             }
         }
+        const vistaInicial = new URLSearchParams(window.location.search).get('vista');
+        if (vistaInicial && document.getElementById('view-' + vistaInicial)) mostrarSeccion(vistaInicial);
     </script>
 </body>
 </html>

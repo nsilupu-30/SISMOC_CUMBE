@@ -8,3 +8,6 @@ class AsistenciaConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "asistencia"
     verbose_name = "Control de Asistencia y Biometría ZKTeco"
+
+    def ready(self):
+        from asistencia import signals  # noqa: F401

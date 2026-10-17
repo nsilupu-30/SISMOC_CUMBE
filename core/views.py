@@ -12,6 +12,8 @@ from django.conf import settings
 from core.models import Usuario
 from asistencia.models import MarcacionBiometrica, ResumenAsistenciaDiaria, TurnoHorario
 from asistencia.services.zkteco_live import ZKTecoLiveClient
+from asistencia.views import contexto_asistencia
+from asistencia.services.revision import puede_gestionar
 
 
 def login_view(request):
@@ -78,14 +80,19 @@ def logout_view(request):
 @login_required(login_url='login')
 def dashboard_view(request):
     """Vista web principal para monitoreo en vivo de SISMOC-CUMBE."""
-    # Obtener estado en tiempo real del reloj ZKTeco
+    # Consultar registros guardados; abrir la página no crea ni sincroniza marcas.
     client = ZKTecoLiveClient()
-    info_huellero = client.sincronizar_marcaciones_en_vivo()
+    info_huellero = client.consultar_registros_locales()
+    if not puede_gestionar(request.user):
+        info_huellero['colaboradores_presentes'] = [c for c in info_huellero['colaboradores_presentes'] if c['dni'] == request.user.dni]
+        info_huellero['total_presentes_hoy'] = len(info_huellero['colaboradores_presentes'])
 
     # Resumen general para la cabecera
-    total_usuarios = Usuario.objects.filter(esta_activo=True).count()
+    total_usuarios = Usuario.objects.filter(esta_activo=True).count() if puede_gestionar(request.user) else 1
     total_conductores = Usuario.objects.filter(rol=Usuario.Rol.CONDUCTOR, esta_activo=True).count()
     resumenes_recientes = ResumenAsistenciaDiaria.objects.select_related('usuario').order_by('-fecha')[:25]
+    if not puede_gestionar(request.user):
+        resumenes_recientes = ResumenAsistenciaDiaria.objects.filter(usuario=request.user).order_by('-fecha')[:25]
     turnos = TurnoHorario.objects.filter(activo=True)
 
     context = {
@@ -98,4 +105,5 @@ def dashboard_view(request):
         'turnos': turnos,
         'roles': Usuario.Rol.choices,
     }
+    context.update(contexto_asistencia(request))
     return render(request, 'index.html', context)

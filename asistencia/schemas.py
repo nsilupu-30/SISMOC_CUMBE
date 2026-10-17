@@ -65,6 +65,8 @@ class ResumenAsistenciaOutSchema(Schema):
     estado_display: str
     observaciones: str
     verificado_contabilidad: bool
+    estado_revision: str
+    fecha_revision: Optional[datetime] = None
 
     @staticmethod
     def resolve_dni(obj):
@@ -85,6 +87,11 @@ class ResumenAsistenciaOutSchema(Schema):
     @staticmethod
     def resolve_estado_display(obj):
         return obj.get_estado_display()
+
+    @staticmethod
+    def resolve_estado_revision(obj):
+        from asistencia.services.revision import estado_revision
+        return estado_revision(obj)
 
 
 class CargaExcelResponseSchema(Schema):

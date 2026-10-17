@@ -4,10 +4,11 @@
 # ==============================================================================
 
 from typing import List, Optional
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 from django.utils import timezone
 from django.db.models import Sum, Count, Q
+from django.db import transaction
 from ninja import Router, File, UploadedFile
 from ninja.errors import HttpError
 
@@ -37,7 +38,7 @@ from asistencia.services.zkteco_live import ZKTecoLiveClient
 router = Router()
 
 
-@router.post("/marcar", response=MarcacionOutSchema, auth=None)
+@router.post("/marcar", response=MarcacionOutSchema, auth=auth_any)
 def registrar_marcacion(request, data: MarcacionCreateSchema):
     """
     Registra una marcación biométrica o móvil en tiempo real.
@@ -47,6 +48,15 @@ def registrar_marcacion(request, data: MarcacionCreateSchema):
     - Webhook / Servicio de sincronización del reloj ZKTeco.
     """
     dni = data.dni.strip()
+    if not dni.isdigit() or len(dni) != 8:
+        raise HttpError(400, "El DNI debe contener ocho dígitos.")
+    from asistencia.services.revision import puede_gestionar
+    if request.auth.dni != dni and not puede_gestionar(request.auth):
+        raise HttpError(403, "Solo puede registrar su propia asistencia.")
+    if data.tipo_evento not in MarcacionBiometrica.TipoEvento.values:
+        raise HttpError(400, "Tipo de evento no válido.")
+    if data.origen not in MarcacionBiometrica.OrigenMarcacion.values:
+        raise HttpError(400, "Origen de marcación no válido.")
     usuario = Usuario.objects.filter(dni=dni).first()
 
     ahora = timezone.localtime(timezone.now())
@@ -68,18 +78,25 @@ def registrar_marcacion(request, data: MarcacionCreateSchema):
     # Si hay usuario registrado, actualizar o crear el resumen diario
     if usuario:
         fecha_hoy = ahora.date()
-        resumen, _ = ResumenAsistenciaDiaria.objects.get_or_create(
+        resumen_abierto = None
+        if data.tipo_evento != "ENTRADA":
+            resumen_abierto = ResumenAsistenciaDiaria.objects.filter(
+                usuario=usuario, fecha__range=(fecha_hoy - timedelta(days=1), fecha_hoy),
+                primera_entrada__isnull=False, ultima_salida__isnull=True,
+            ).order_by("-fecha").first()
+        resumen, _ = (resumen_abierto, False) if resumen_abierto else ResumenAsistenciaDiaria.objects.get_or_create(
             usuario=usuario,
             fecha=fecha_hoy,
             defaults={
-                "primera_entrada": ahora.time(),
-                "ultima_salida": ahora.time(),
+                "primera_entrada": ahora.time() if data.tipo_evento == "ENTRADA" else None,
+                "turno_aplicado": usuario.turno,
                 "estado": ResumenAsistenciaDiaria.EstadoAsistencia.ASISTIO,
             },
         )
-        if not resumen.primera_entrada:
+        if data.tipo_evento == "ENTRADA" and not resumen.primera_entrada:
             resumen.primera_entrada = ahora.time()
-        resumen.ultima_salida = ahora.time()
+        if data.tipo_evento == "SALIDA":
+            resumen.ultima_salida = ahora.time()
         resumen.save()
 
     return nueva_marcacion
@@ -104,7 +121,8 @@ def subir_excel_zkteco(request, file: UploadedFile = File(...)):
     )
 
     try:
-        resultado = parser.procesar()
+        with transaction.atomic():
+            resultado = parser.procesar()
         return resultado
     except Exception as e:
         raise HttpError(500, f"Error al procesar el archivo Excel de ZKTeco: {str(e)}")
@@ -121,7 +139,7 @@ def sincronizar_huellero_en_tiempo_real(request, ip: Optional[str] = None, puert
     return res
 
 
-@router.get("/tiempo-real", response=SincronizacionHuelleroOutSchema, auth=None)
+@router.get("/tiempo-real", response=SincronizacionHuelleroOutSchema, auth=auth_contadora_or_admin)
 def consultar_asistencia_tiempo_real(request):
     """
     Retorna la lista de trabajadores presentes hoy en tiempo real,
@@ -147,7 +165,8 @@ def listar_resumenes_asistencia(
 
     # Si es un empleado normal o conductor, solo puede ver su propia asistencia
     usuario_actual = request.auth
-    if usuario_actual and usuario_actual.rol in [Usuario.Rol.CONDUCTOR, Usuario.Rol.ADMINISTRATIVO, Usuario.Rol.OPERADOR_EMBARQUE]:
+    from asistencia.services.revision import puede_gestionar
+    if usuario_actual and not puede_gestionar(usuario_actual):
         queryset = queryset.filter(usuario=usuario_actual)
     elif dni:
         queryset = queryset.filter(usuario__dni=dni.strip())
@@ -179,18 +198,20 @@ def reporte_planilla_consolidado(
     - Total de Vueltas de Choferes ('X' simples y 'XX' dobles)
     - Minutos acumulados de tardanza
     """
-    ahora = timezone.now()
+    ahora = timezone.localtime()
     if not fecha_inicio:
         fecha_inicio = ahora.date().replace(day=1)
     if not fecha_fin:
         fecha_fin = ahora.date()
+    if fecha_fin < fecha_inicio:
+        raise HttpError(400, "La fecha final no puede ser anterior a la inicial.")
 
     periodo_str = mes_periodo or fecha_inicio.strftime("%Y-%m")
 
     queryset = ResumenAsistenciaDiaria.objects.filter(
         fecha__gte=fecha_inicio,
         fecha__lte=fecha_fin,
-    ).select_related("usuario")
+    ).select_related("usuario").prefetch_related("ajustes")
 
     totales = queryset.aggregate(
         sum_horas=Sum("horas_trabajadas"),
@@ -232,13 +253,25 @@ def reporte_planilla_consolidado(
             "total_vueltas_chofer": u_tot["vueltas"] or 0,
         })
 
+    from asistencia.services.revision import valores_ajustados
+    ajustados = {"horas_trabajadas": Decimal(0), "horas_extras_25": Decimal(0), "horas_extras_35": Decimal(0), "horas_nocturnas": Decimal(0)}
+    for fila in desglose:
+        registros = [r for r in queryset if r.usuario_id == fila["usuario_id"]]
+        valores = [valores_ajustados(r) for r in registros]
+        for campo in ajustados:
+            total = sum((v[campo] for v in valores), Decimal(0))
+            fila["total_horas" if campo == "horas_trabajadas" else campo] = float(total)
+            ajustados[campo] += total
+        fila["jornadas_aprobadas"] = sum(r.verificado_contabilidad for r in registros)
+        fila["jornadas_pendientes"] = sum(not r.verificado_contabilidad for r in registros)
+
     return {
         "periodo": periodo_str,
         "total_colaboradores": len(desglose),
-        "total_horas_efectivas": Decimal(str(totales["sum_horas"] or "0.00")),
-        "total_horas_extras_25": Decimal(str(totales["sum_he_25"] or "0.00")),
-        "total_horas_extras_35": Decimal(str(totales["sum_he_35"] or "0.00")),
-        "total_horas_nocturnas": Decimal(str(totales["sum_nocturnas"] or "0.00")),
+        "total_horas_efectivas": ajustados["horas_trabajadas"],
+        "total_horas_extras_25": ajustados["horas_extras_25"],
+        "total_horas_extras_35": ajustados["horas_extras_35"],
+        "total_horas_nocturnas": ajustados["horas_nocturnas"],
         "total_minutos_tardanza": totales["sum_tardanza"] or 0,
         "total_vueltas_conductores": totales["sum_vueltas"] or 0,
         "desglose_por_empleado": desglose,
@@ -253,6 +286,12 @@ def verificar_resumen_contabilidad(request, resumen_id: int):
     except ResumenAsistenciaDiaria.DoesNotExist:
         raise HttpError(404, "Resumen de asistencia no encontrado")
 
-    resumen.verificado_contabilidad = True
-    resumen.save()
+    from asistencia.services.revision import revisar
+    from django.core.exceptions import ValidationError
+    try:
+        with transaction.atomic():
+            resumen = ResumenAsistenciaDiaria.objects.select_for_update().get(pk=resumen_id)
+            revisar(resumen, request.auth, "APROBADO")
+    except ValidationError as exc:
+        raise HttpError(400, " ".join(exc.messages))
     return {"mensaje": f"Resumen del {resumen.fecha} verificado con éxito.", "exito": True}

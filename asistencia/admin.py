@@ -45,6 +45,7 @@ class MarcacionBiometricaAdmin(admin.ModelAdmin):
 
 @admin.register(ResumenAsistenciaDiaria)
 class ResumenAsistenciaDiariaAdmin(admin.ModelAdmin):
+    readonly_fields = ("verificado_contabilidad", "estado_revision", "revisado_por", "fecha_revision")
     list_display = (
         "fecha",
         "usuario",

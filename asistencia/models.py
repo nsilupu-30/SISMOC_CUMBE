@@ -7,6 +7,10 @@
 from django.db import models
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
+from asistencia.models_revision import (  # noqa: F401
+    IncidenciaAsistencia, AjusteAsistencia, RevisionAsistencia,
+    CorreccionEvento, CierreAsistencia,
+)
 
 
 class TurnoHorario(models.Model):
@@ -179,6 +183,7 @@ class ResumenAsistenciaDiaria(models.Model):
         DESCANSO_MEDICO = "DESCANSO_MEDICO", _("🏥 Descanso Médico")
         DESCANSO_SUTRAN = "DESCANSO_SUTRAN", _("🛑 Descanso Obligatorio SUTRAN (8h)")
         DIA_LIBRE = "DIA_LIBRE", _("🏖️ Día Libre / Feriado")
+        VACACIONES = "VACACIONES", _("Vacaciones")
 
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -261,6 +266,15 @@ class ResumenAsistenciaDiaria(models.Model):
         default=False,
         verbose_name="Verificado por Contadora (CPC. Yaneli Terrones)",
     )
+    estado_revision = models.CharField(
+        max_length=12, default="PENDIENTE",
+        choices=[("PENDIENTE", "Pendiente"), ("OBSERVADO", "Observado"), ("APROBADO", "Aprobado")],
+    )
+    revisado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="jornadas_revisadas",
+    )
+    fecha_revision = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "asistencia_resumen"

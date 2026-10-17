@@ -1,0 +1,60 @@
+.ayuda { color: var(--text-muted); font-size: .84rem; margin: 8px 0 16px; line-height: 1.6; }
+.filtros-asistencia { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 14px; align-items: end; }
+.filtros-asistencia label,.formulario-linea label,.formulario-vertical label { display: flex; flex-direction: column; gap: 7px; font-size: .82rem; color: #cbd5e1; }
+.filtros-asistencia input,.filtros-asistencia select,.formulario-linea input,.formulario-linea select,.formulario-vertical input,.formulario-vertical select,.formulario-vertical textarea { width: 100%; min-width: 0; padding: 10px; border-radius: 7px; border: 1px solid #40516b; background: #0a1322; color: #f1f5f9; color-scheme: dark; }
+.formulario-vertical textarea { min-height: 80px; }
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible,summary:focus-visible { outline: 2px solid #ffb45c; outline-offset: 3px; }
+.periodo-asistencia { margin-top: 20px; }
+.tabla-diaria { max-height: 680px; overflow: auto; }
+.tabla-diaria thead { position: sticky; top: 0; z-index: 1; }
+.custom-dark-table small,.registro-revision small { display: block; color: var(--text-muted); font-size: .75rem; margin-top: 5px; }
+.custom-dark-table td { min-width: 95px; }
+.custom-dark-table a,.lista-avisos a,.registro-revision a { color: #7dd3fc; }
+.custom-dark-table tfoot { background: var(--bg-card-header); font-weight: 700; }
+.estado-vacio { padding: 30px !important; text-align: center; color: var(--text-muted) !important; }
+.paginacion,.acciones-revision { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+.detalle-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,400px),1fr)); gap: 24px; margin-bottom: 24px; }
+#detalle-jornada { scroll-margin-top: 20px; border-color: var(--border-highlight); }
+.content-panel h4 { font-size: 1rem; margin: 20px 0 12px; }
+.aviso { padding: 12px 16px; background: #162d41; border: 1px solid #34566e; border-radius: 8px; margin: 12px 0; font-size: .85rem; }
+.aviso-error { background: #332318; border-color: #98642b; color: #ffd6a3; }
+.lista-avisos { padding-left: 22px; font-size: .85rem; line-height: 1.7; }
+.formulario-linea { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 14px 0; padding-bottom: 14px; border-bottom: 1px solid var(--border-color); }
+.formulario-linea label { flex: 1; min-width: 150px; }
+.formulario-vertical { display: grid; gap: 12px; margin: 16px 0; }
+.formulario-vertical button { justify-self: start; }
+.registro-revision { padding: 12px; margin: 10px 0; border: 1px solid var(--border-color); border-radius: 8px; font-size: .85rem; }
+.registro-revision p { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+summary { cursor: pointer; padding: 10px 0; color: #ffbf80; font-size: .88rem; }
+.historial { margin-top: 24px; }
+.confirmar-cierre { display: flex; align-items: center; gap: 10px; margin: 16px 0; font-size: .85rem; }
+button:disabled { opacity: .5; cursor: not-allowed; transform: none !important; }
+.estado-equipo { flex-basis: 100%; color: var(--text-muted); font-size: .75rem; }
+.badge-huellero { background: rgba(148,163,184,.1); border-color: #475569; color: #cbd5e1; }
+body { padding-bottom: 120px; }
+.session-panel {
+    position: fixed;
+    right: 24px;
+    bottom: 20px;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: min(470px, calc(100% - 32px));
+    padding: 12px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-highlight);
+    border-radius: 14px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.4);
+}
+.session-panel .user-badge-sidebar { flex: 1; min-width: 0; margin: 0; padding: 0; background: transparent; border: 0; }
+.session-panel .user-avatar-circle { flex-shrink: 0; }
+.session-panel .user-badge-role { color: #cbd5e1; }
+.session-panel .btn-top-logout { flex-shrink: 0; white-space: nowrap; }
+@media(max-width: 560px) {
+    body { padding-bottom: 170px; }
+    .session-panel { right: 16px; bottom: 12px; flex-wrap: wrap; gap: 10px; }
+    .session-panel .user-badge-sidebar { flex-basis: 100%; }
+    .session-panel .btn-top-logout { width: 100%; justify-content: center; }
+}
+@media(max-width: 900px) { body { padding-left: 0; } .sidebar { position: relative; width: 100%; height: auto; } .sidebar .menu-list { display: flex; flex-wrap: wrap; } .sidebar .menu-category,.sidebar-footer { display: none; } .sidebar .menu-item { flex: 1 1 180px; } .main-wrapper { padding: 20px 14px; } .content-panel { padding: 16px; } .top-actions { flex-wrap: wrap; } }

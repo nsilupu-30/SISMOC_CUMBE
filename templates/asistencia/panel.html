@@ -1,0 +1,66 @@
+<div class="content-panel">
+    <div class="panel-header-custom">
+        <div><h3 class="panel-title-text">Asistencia y revisión de jornadas</h3><p class="ayuda">Consulte los registros, compruebe el cálculo y revise cada jornada antes del cierre.</p></div>
+        {% if puede_gestionar %}<a class="btn-dark-outline" href="{% url 'exportar_asistencia' %}?{{ consulta_asistencia }}">Exportar resumen CSV</a>{% endif %}
+    </div>
+    <form method="get" class="filtros-asistencia">
+        <input type="hidden" name="vista" value="asistencia">
+        <label>Desde<input type="date" name="desde" value="{{ filtros.desde }}" required></label>
+        <label>Hasta<input type="date" name="hasta" value="{{ filtros.hasta }}" required></label>
+        <label>Sede<select name="sede"><option value="">Todas las sedes</option>{% for sede in sedes_asistencia %}<option {% if sede == filtros.sede %}selected{% endif %}>{{ sede }}</option>{% endfor %}</select></label>
+        <label>Trabajador<input name="trabajador" value="{{ filtros.trabajador }}" placeholder="Nombre o DNI"></label>
+        <label>Asistencia<select name="estado"><option value="">Todos los estados</option>{% for codigo, nombre in estados_asistencia %}<option value="{{ codigo }}" {% if codigo == filtros.estado %}selected{% endif %}>{{ nombre }}</option>{% endfor %}</select></label>
+        <label>Revisión<select name="revision"><option value="">Todas</option><option value="PENDIENTE" {% if filtros.revision == 'PENDIENTE' %}selected{% endif %}>Pendiente</option><option value="OBSERVADO" {% if filtros.revision == 'OBSERVADO' %}selected{% endif %}>Observado</option><option value="APROBADO" {% if filtros.revision == 'APROBADO' %}selected{% endif %}>Aprobado</option></select></label>
+        <button class="btn-cumbe" type="submit">Consultar</button>
+        <a class="btn-dark-outline" href="?vista=asistencia">Limpiar</a>
+    </form>
+    {% if filtros.error %}<p class="aviso aviso-error" role="alert">{{ filtros.error }}</p>{% endif %}
+    {% if jornadas_fecha_futura %}<p class="aviso aviso-error">Hay {{ jornadas_fecha_futura }} jornadas con fechas futuras en los registros guardados. Revise sus cargas de origen; no se incluyen cuando quedan fuera del intervalo consultado.</p>{% endif %}
+    <p class="ayuda periodo-asistencia">Periodo: <strong>{{ filtros.desde }} al {{ filtros.hasta }}</strong> · {{ total_jornadas }} jornadas · {{ conteos_revision.APROBADO }} aprobadas · {{ conteos_revision.PENDIENTE }} pendientes · {{ conteos_revision.OBSERVADO }} observadas.</p>
+    <div class="table-responsive tabla-diaria">
+        <table class="custom-dark-table">
+            <caption class="visually-hidden">Jornadas del periodo seleccionado. Las horas se muestran en formato decimal.</caption>
+            <thead><tr><th>Fecha de jornada</th><th>Trabajador / sede</th><th>Turno</th><th>Entrada / salida</th><th>Refrigerio</th><th>H. efectivas</th><th>Tardanza</th><th>Tiempo pendiente</th><th>Extras 25 %</th><th>Extras 35 %</th><th>Nocturnas</th><th>Asistencia</th><th>Revisión</th><th>Detalle</th></tr></thead>
+            <tbody>{% for r in pagina_asistencia %}<tr>
+                <td>{{ r.fecha|date:'d/m/Y' }}</td><td><strong>{{ r.usuario.nombre_completo }}</strong><small>{{ r.usuario.agencia_sede }} · {{ r.usuario.dni }}</small></td>
+                <td>{% if r.turno_visible %}{{ r.turno_visible.nombre }}<small>{{ r.turno_visible.hora_entrada|time:'H:i' }}–{{ r.turno_visible.hora_salida|time:'H:i' }}</small>{% else %}<span class="status-pill pill-orange">Sin turno</span>{% endif %}</td>
+                <td>{{ r.primera_entrada|time:'H:i:s'|default:'Sin entrada' }}<small>{{ r.ultima_salida|time:'H:i:s'|default:'Sin salida' }}{% if r.ultima_salida < r.primera_entrada %} (+1 día por confirmar){% endif %}</small></td>
+                <td>{{ r.refrigerio_visible }}</td><td><strong>{{ r.valores.horas_trabajadas|floatformat:2 }} h</strong></td><td>{{ r.minutos_tardanza }} min</td><td>{% if r.deficit_visible != None %}{{ r.deficit_visible }} min{% else %}Por revisar{% endif %}</td>
+                <td>{{ r.valores.horas_extras_25|floatformat:2 }} h</td><td>{{ r.valores.horas_extras_35|floatformat:2 }} h</td><td>{{ r.valores.horas_nocturnas|floatformat:2 }} h</td>
+                <td>{{ r.get_estado_display }}</td><td><span class="status-pill {% if r.revision_visible == 'APROBADO' %}pill-emerald{% elif r.revision_visible == 'OBSERVADO' %}pill-rose{% else %}pill-orange{% endif %}">{{ r.revision_visible|title }}</span>{% if r.alertas %}<small>Revisar {{ r.alertas|length }} aviso{{ r.alertas|length|pluralize }}</small>{% endif %}</td>
+                <td><a class="btn-dark-outline" href="?{{ consulta_asistencia }}&amp;pagina={{ pagina_asistencia.number }}&amp;detalle={{ r.pk }}#detalle-jornada" aria-label="Ver jornada de {{ r.usuario.nombre_completo }} del {{ r.fecha|date:'d/m/Y' }}">Ver detalle</a></td>
+            </tr>{% empty %}<tr><td colspan="14" class="estado-vacio">No hay jornadas para estos filtros. Puede cambiar el periodo o registrar una jornada.</td></tr>{% endfor %}</tbody>
+        </table>
+    </div>
+    <p class="ayuda">Horas en decimales: 2,50 h = 2 h 30 min. Refrigerio en HH:MM:SS. El tiempo pendiente compara los tramos con el turno y no genera un descuento automático.</p>
+    <nav class="paginacion" aria-label="Páginas de asistencia">{% if pagina_asistencia.has_previous %}<a class="btn-dark-outline" href="?{{ consulta_asistencia }}&amp;pagina={{ pagina_asistencia.previous_page_number }}">Anterior</a>{% endif %}<span>Página {{ pagina_asistencia.number }} de {{ pagina_asistencia.paginator.num_pages }}</span>{% if pagina_asistencia.has_next %}<a class="btn-dark-outline" href="?{{ consulta_asistencia }}&amp;pagina={{ pagina_asistencia.next_page_number }}">Siguiente</a>{% endif %}</nav>
+</div>
+
+{% if detalle_jornada %}{% include 'asistencia/detalle.html' with d=detalle_jornada %}{% endif %}
+
+{% if puede_gestionar %}
+<div class="content-panel">
+    <h3 class="panel-title-text">Resumen para Contabilidad</h3>
+    <p class="ayuda">Incluye todas las jornadas filtradas, también las pendientes. Los ajustes aprobados de cada concepto están incorporados; descuentos y compensaciones se muestran aparte. Las horas nocturnas pueden coincidir con las extras.</p>
+    <div class="table-responsive"><table class="custom-dark-table"><thead><tr><th>Trabajador</th><th>Jornadas</th><th>H. efectivas</th><th>Extras 25 %</th><th>Extras 35 %</th><th>Nocturnas</th><th>Descanso / feriado</th><th>Descuento</th><th>Compensación</th><th>Revisión</th></tr></thead><tbody>
+    {% for fila in consolidado %}<tr><td><a href="?vista=asistencia&amp;desde={{ filtros.desde }}&amp;hasta={{ filtros.hasta }}&amp;trabajador={{ fila.usuario.dni|urlencode }}">{{ fila.usuario.nombre_completo }}</a><small>{{ fila.usuario.agencia_sede }}</small></td><td>{{ fila.jornadas }}</td><td>{{ fila.horas_trabajadas|floatformat:2 }}</td><td>{{ fila.horas_extras_25|floatformat:2 }}</td><td>{{ fila.horas_extras_35|floatformat:2 }}</td><td>{{ fila.horas_nocturnas|floatformat:2 }}</td><td>{{ fila.descanso_feriado|floatformat:2 }}</td><td>{{ fila.descuento|floatformat:2 }}</td><td>{{ fila.compensacion|floatformat:2 }}</td><td>{{ fila.aprobadas }}/{{ fila.jornadas }} aprobadas<small>{{ fila.pendientes }} pendientes · {{ fila.observadas }} observadas</small></td></tr>{% empty %}<tr><td colspan="10" class="estado-vacio">Sin resultados en este periodo.</td></tr>{% endfor %}
+    </tbody><tfoot><tr><th>Total (horas)</th><td>{{ total_jornadas }}</td><td>{{ totales_asistencia.horas_trabajadas|floatformat:2 }}</td><td>{{ totales_asistencia.horas_extras_25|floatformat:2 }}</td><td>{{ totales_asistencia.horas_extras_35|floatformat:2 }}</td><td>{{ totales_asistencia.horas_nocturnas|floatformat:2 }}</td><td>{{ totales_asistencia.descanso_feriado|floatformat:2 }}</td><td>{{ totales_asistencia.descuento|floatformat:2 }}</td><td>{{ totales_asistencia.compensacion|floatformat:2 }}</td><td>{{ conteos_revision.APROBADO }} aprobadas</td></tr></tfoot></table></div>
+</div>
+
+<div class="content-panel">
+    <h3 class="panel-title-text">Pendientes de Administración</h3>
+    <p class="ayuda">Avisos de las jornadas de esta página. Use los filtros y la paginación para consultar las demás.</p>
+    <ul class="lista-avisos">{% for r in pagina_asistencia %}{% for aviso in r.alertas %}<li><a href="?{{ consulta_asistencia }}&amp;detalle={{ r.pk }}#detalle-jornada">{{ r.usuario.nombre_completo }} · {{ r.fecha|date:'d/m/Y' }}</a>: {{ aviso }}</li>{% endfor %}{% endfor %}</ul>
+    <h4>Marcaciones sin trabajador asociado: {{ total_sin_identidad }}</h4><p class="ayuda">Conteo de todo el periodo. Para ver la lista, quite los filtros de sede y trabajador. Se muestran hasta 30 registros.</p>
+    {% for m in sin_identidad %}<form method="post" action="{% url 'asociar_marcacion' m.pk %}" class="formulario-linea">{% csrf_token %}{% include 'asistencia/_filtros_post.html' %}<span>{{ m.fecha_hora|date:'d/m/Y H:i:s' }} · ID {{ m.zkteco_user_id|default_if_none:'—' }} · {{ m.nombre_empleado }} · {{ m.dni }}</span><label>Trabajador<select name="usuario" required><option value="">Seleccione</option>{% for u in usuarios_asistencia %}<option value="{{ u.pk }}">{{ u.nombre_completo }} · {{ u.dni }}</option>{% endfor %}</select></label><label>Motivo<input name="motivo" required maxlength="500"></label><button class="btn-dark-outline" type="submit">Asociar identidad</button></form>{% endfor %}
+    {% for carga in cargas_con_error %}<p class="aviso aviso-error">Carga con error: {{ carga.nombre_archivo_original }} · {{ carga.fecha_subida|date:'d/m/Y H:i' }} · {{ carga.detalle_log|truncatechars:300 }}</p>{% endfor %}
+    <details><summary>Registrar una jornada para revisión</summary><p class="ayuda">Permite registrar un día sin resumen, por ejemplo para documentar vacaciones o un permiso. No genera marcas ni horas.</p><form method="post" action="{% url 'crear_jornada' %}" class="formulario-linea">{% csrf_token %}{% include 'asistencia/_filtros_post.html' %}<label>Trabajador<select name="usuario" required>{% for u in usuarios_asistencia %}<option value="{{ u.pk }}">{{ u.nombre_completo }} · {{ u.dni }}</option>{% endfor %}</select></label><label>Fecha<input type="date" name="fecha" required></label><button class="btn-cumbe">Crear jornada pendiente</button></form></details>
+</div>
+
+<div class="content-panel">
+    <h3 class="panel-title-text">Cierre del periodo</h3>
+    <p class="ayuda">El cierre abarca <strong>todas las sedes y trabajadores</strong> entre {{ filtros.desde }} y {{ filtros.hasta }}, sin aplicar los otros filtros. Requiere jornadas aprobadas y marcaciones conciliadas. Bloquea cambios y guarda los resultados.</p>
+    {% for cierre in cierres_asistencia %}<p class="aviso">Cerrado: {{ cierre.fecha_inicio|date:'d/m/Y' }} al {{ cierre.fecha_fin|date:'d/m/Y' }} · {{ cierre.total_jornadas }} jornadas · {{ cierre.cerrado_por.nombre_completo|default:'Responsable no disponible' }} · {{ cierre.cerrado_el|date:'d/m/Y H:i' }}</p>{% endfor %}
+    {% if puede_aprobar %}<form method="post" action="{% url 'cerrar_periodo' %}">{% csrf_token %}{% include 'asistencia/_filtros_post.html' %}<label class="confirmar-cierre"><input type="checkbox" name="confirmar" value="si" required> He revisado el periodo completo y confirmo su cierre.</label><button class="btn-cumbe" type="submit">Cerrar periodo completo</button></form>{% else %}<p class="ayuda">Contabilidad o Gerencia realiza la aprobación y el cierre.</p>{% endif %}
+</div>
+{% endif %}
