@@ -6,6 +6,7 @@ from django.db import models
 
 class IncidenciaAsistencia(models.Model):
     TIPOS = [
+        ("DESCANSO_SEMANAL", "Descanso semanal"), ("FERIADO_NO_LABORADO", "Feriado no laborado"),
         ("VACACIONES", "Vacaciones"), ("PERMISO", "Permiso"),
         ("DESCANSO_MEDICO", "Descanso médico"), ("CAMBIO_DESCANSO", "Cambio de descanso"),
         ("COBERTURA", "Cobertura de compañero"), ("FERIADO", "Feriado o descanso trabajado"),

@@ -12,7 +12,7 @@ from django.conf import settings
 from core.models import Usuario
 from asistencia.models import MarcacionBiometrica, ResumenAsistenciaDiaria, TurnoHorario
 from asistencia.services.zkteco_live import ZKTecoLiveClient
-from asistencia.views import contexto_asistencia
+from asistencia.views import contexto_asistencia, datos_registros_huellero
 from asistencia.services.revision import puede_gestionar
 
 
@@ -89,7 +89,10 @@ def dashboard_view(request):
 
     # Resumen general para la cabecera
     total_usuarios = Usuario.objects.filter(esta_activo=True).count() if puede_gestionar(request.user) else 1
-    total_conductores = Usuario.objects.filter(rol=Usuario.Rol.CONDUCTOR, esta_activo=True).count()
+    conductores = Usuario.objects.filter(rol=Usuario.Rol.CONDUCTOR, esta_activo=True)
+    if not puede_gestionar(request.user):
+        conductores = conductores.filter(pk=request.user.pk)
+    total_conductores = conductores.count()
     resumenes_recientes = ResumenAsistenciaDiaria.objects.select_related('usuario').order_by('-fecha')[:25]
     if not puede_gestionar(request.user):
         resumenes_recientes = ResumenAsistenciaDiaria.objects.filter(usuario=request.user).order_by('-fecha')[:25]
@@ -104,6 +107,7 @@ def dashboard_view(request):
         'resumenes_recientes': resumenes_recientes,
         'turnos': turnos,
         'roles': Usuario.Rol.choices,
+        'registros_huellero': datos_registros_huellero(request.user),
     }
     context.update(contexto_asistencia(request))
     return render(request, 'index.html', context)

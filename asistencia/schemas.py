@@ -70,19 +70,19 @@ class ResumenAsistenciaOutSchema(Schema):
 
     @staticmethod
     def resolve_dni(obj):
-        return obj.usuario.dni if obj.usuario else ""
+        return obj.persona.dni if obj.persona else ""
 
     @staticmethod
     def resolve_nombre_completo(obj):
-        return obj.usuario.nombre_completo if obj.usuario else ""
+        return obj.persona.nombre_completo if obj.persona else ""
 
     @staticmethod
     def resolve_rol(obj):
-        return obj.usuario.rol if obj.usuario else ""
+        return obj.persona.rol if obj.persona else ""
 
     @staticmethod
     def resolve_agencia_sede(obj):
-        return obj.usuario.agencia_sede if obj.usuario else ""
+        return obj.persona.agencia_sede if obj.persona else ""
 
     @staticmethod
     def resolve_estado_display(obj):
@@ -107,6 +107,10 @@ class CargaExcelResponseSchema(Schema):
     resumenes_generados: int
     alertas: List[str]
     exito: bool
+    codigos_biometricos: int = 0
+    identidades_pendientes: int = 0
+    marcaciones_nuevas: int = 0
+    marcaciones_repetidas: int = 0
 
 
 class ColaboradorPresenteSchema(Schema):

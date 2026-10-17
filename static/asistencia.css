@@ -26,11 +26,32 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .registro-revision { padding: 12px; margin: 10px 0; border: 1px solid var(--border-color); border-radius: 8px; font-size: .85rem; }
 .registro-revision p { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 summary { cursor: pointer; padding: 10px 0; color: #ffbf80; font-size: .88rem; }
+.cabecera-identidades-plegable { display: flex; align-items: center; justify-content: space-between; gap: 16px; list-style: none; padding: 0; color: inherit; }
+.cabecera-identidades-plegable::-webkit-details-marker { display: none; }
+.cabecera-identidades-plegable .panel-title-text { margin: 0; }
+.flecha-identidades { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex-shrink: 0; border: 1px solid #334155; border-radius: 8px; color: #ffbf80; font-size: 1.5rem; }
+.panel-identidades-plegable:not([open]) .flecha-identidades { transform: rotate(180deg); }
+.contenido-identidades-plegable { margin-top: 20px; }
 .historial { margin-top: 24px; }
 .confirmar-cierre { display: flex; align-items: center; gap: 10px; margin: 16px 0; font-size: .85rem; }
 button:disabled { opacity: .5; cursor: not-allowed; transform: none !important; }
 .estado-equipo { flex-basis: 100%; color: var(--text-muted); font-size: .75rem; }
 .badge-huellero { background: rgba(148,163,184,.1); border-color: #475569; color: #cbd5e1; }
+.modulos-dashboard { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,280px),1fr)); gap: 18px; }
+.modulo-dashboard { padding: 20px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-dark); }
+.modulo-dashboard p { font-size: .85rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 18px; }
+.unidad-kpi { font-size: 1rem; color: #38bdf8; }
+.filtros-dashboard { max-width: 660px; margin-bottom: 18px; }
+.resumen-tiempos-detalle { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px 16px; font-size: .85rem; }
+.resumen-tiempos-detalle dt { color: var(--text-muted); font-weight: 500; }
+.resumen-tiempos-detalle dd { margin: 0; font-weight: 600; }
+.cuadro-control-excel { margin: 22px 0 28px; padding: 18px; border: 1px solid var(--border-highlight); border-radius: 12px; }
+.tabla-control-excel { font-variant-numeric: tabular-nums; }
+.tabla-control-excel td { white-space: nowrap; }
+.tabla-control-excel th { min-width: 110px; }
+.tabla-control-excel .marca-refrigerio td:nth-child(4),.tabla-control-excel .marca-refrigerio td:nth-child(5) { background: rgba(232,116,0,.14); }
+.tabla-control-excel .saldo-jornada { background: rgba(245,158,11,.16); color: #fde68a; }
+.tabla-control-excel .saldo-deficit { background: rgba(244,63,94,.16); color: #fda4af; }
 body { padding-bottom: 120px; }
 .session-panel {
     position: fixed;
@@ -58,3 +79,48 @@ body { padding-bottom: 120px; }
     .session-panel .btn-top-logout { width: 100%; justify-content: center; }
 }
 @media(max-width: 900px) { body { padding-left: 0; } .sidebar { position: relative; width: 100%; height: auto; } .sidebar .menu-list { display: flex; flex-wrap: wrap; } .sidebar .menu-category,.sidebar-footer { display: none; } .sidebar .menu-item { flex: 1 1 180px; } .main-wrapper { padding: 20px 14px; } .content-panel { padding: 16px; } .top-actions { flex-wrap: wrap; } }
+
+/* Identificación de personal sin cuentas de acceso. */
+.registro-trabajador-dialog { width: min(580px, calc(100vw - 32px)); max-height: 85vh; overflow: auto; box-sizing: border-box; padding: 28px; border: 1px solid #475569; border-radius: 16px; background: #101d30; color: #e2e8f0; }
+.registro-trabajador-dialog::backdrop { background: rgba(0, 0, 0, .7); }
+.registro-trabajador-dialog label { display: flex; flex-direction: column; gap: 8px; }
+.registro-trabajador-dialog input { width: 100%; box-sizing: border-box; }
+.resultados-trabajador { display: grid; gap: 8px; max-height: 280px; overflow-y: auto; }
+.resultado-ficha { text-align: left; white-space: normal; }
+.buscador-trabajador [hidden], .registro-trabajador-dialog [hidden] { display: none !important; }
+.buscador-trabajador button:disabled, .registro-trabajador-dialog button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Centrado común para las ventanas modales actuales y futuras. */
+dialog:modal { position: fixed; inset: 0; margin: auto; max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); }
+
+.filtros-codigos label { display: flex; flex: 1 1 180px; flex-direction: column; gap: 8px; min-width: 0; }
+.filtros-codigos input, .filtros-codigos select { width: 100%; box-sizing: border-box; }
+
+.envio-asistencia { padding: 18px; border: 1px solid #334155; border-radius: 12px; margin: 16px 0 24px; }
+.envio-asistencia button:disabled { opacity: .5; cursor: not-allowed; }
+
+.revision-trabajador-dialog { width: min(1440px, calc(100vw - 40px)); padding: 24px; border: 1px solid #475569; border-radius: 16px; background: #101d30; color: #e2e8f0; box-sizing: border-box; overflow: auto; }
+.revision-trabajador-dialog::backdrop { background: rgba(0, 0, 0, .75); }
+.revision-trabajador-dialog h3 { font-size: 1.25rem; }
+.revision-trabajador-dialog h4 { margin: 24px 0 14px; }
+.marcas-trabajador-periodo { max-height: 48vh; overflow: auto; }
+.marcas-trabajador-periodo thead { position: sticky; top: 0; z-index: 1; }
+.marcas-trabajador-periodo select { min-width: 230px; }
+.revision-trabajador-dialog .formulario-linea label { flex: 1 1 250px; display: flex; flex-direction: column; gap: 8px; }
+.tabla-trabajadores-asistencia .btn-dark-outline { white-space: nowrap; }
+@media(max-width: 600px) { .revision-trabajador-dialog { width: calc(100vw - 16px); padding: 16px; } }
+
+.detalle-jornada-dialog { width: min(1500px, calc(100vw - 40px)); padding: 16px; border: 1px solid #475569; border-radius: 16px; background: #101d30; color: #e2e8f0; box-sizing: border-box; overflow: auto; }
+.detalle-jornada-dialog::backdrop { background: rgba(0, 0, 0, .75); }
+.detalle-jornada-dialog > .content-panel { margin: 0; }
+
+.tabla-control-excel select { min-width: 225px; width: 100%; }
+.correcciones-cuadro-excel > .btn-cumbe { justify-self: start; }
+
+.formulario-marcacion-manual { max-width: 680px; }
+.formulario-marcacion-manual label { display: flex; flex-direction: column; gap: 8px; }
+.marca-manual-indicador { color: #ffbf80; }
+
+.avance-revision-trabajador, .resultado-aprobacion-masiva { padding: 16px; margin: 18px 0; border: 1px solid #334155; border-radius: 12px; }
+.avance-revision-trabajador button:disabled { opacity: .5; cursor: not-allowed; }
+.resultado-aprobacion-masiva p { margin: 10px 0; }

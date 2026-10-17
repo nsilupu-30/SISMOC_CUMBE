@@ -1,420 +1,194 @@
-# ==============================================================================
-# asistencia/services/zkteco_parser.py
-# SISMOC-CUMBE | Motor de Procesamiento de Asistencia con Pandas
-# Resuelve:
-# 1. Lectura automática de logs de ZKTeco en formatos Tabular, Multi-Hoja o BioTime.
-# 2. Cálculo legal peruano de Horas Extras al 25% (2 primeras) y 35% (restantes).
-# 3. Sobretasa nocturna (22:00 a 06:00).
-# 4. Conteo de Vueltas de Choferes ('X'=1, 'XX'=2) sin errores #¿NOMBRE?.
-# ==============================================================================
+"""Importación de eventos originales ZKTeco por sede y código de trabajador."""
+from collections import Counter
+from datetime import datetime, date
+from decimal import Decimal
+from hashlib import sha256
+from pathlib import Path
+import re
+import unicodedata
 
 import pandas as pd
-import numpy as np
-from datetime import datetime, date, time, timedelta
-from decimal import Decimal
-from typing import Dict, Any, List, Optional
-from django.utils import timezone
+from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils import timezone
 
 from core.models import Usuario
 from asistencia.models import (
-    TurnoHorario,
-    MarcacionBiometrica,
-    ResumenAsistenciaDiaria,
-    CargaArchivoAsistencia,
+    CargaArchivoAsistencia, IdentidadBiometrica, FilaImportacionBiometrica,
+    MarcacionBiometrica, ResumenAsistenciaDiaria,
 )
 
 
-class ZKTecoExcelParser:
-    """Procesador con Pandas para archivos de asistencia de Transportes El Cumbe S.A.C."""
+def normalizar(texto):
+    texto = unicodedata.normalize("NFKD", str(texto or "").strip())
+    return re.sub(r"[^a-z0-9]", "", "".join(c for c in texto if not unicodedata.combining(c)).lower())
 
-    def __init__(self, archivo_path_o_bytes, nombre_archivo: str, subido_por: Optional[Usuario] = None):
+
+def texto(valor):
+    if pd.isna(valor):
+        return ""
+    if isinstance(valor, float) and valor.is_integer():
+        return str(int(valor))
+    return str(valor).strip()
+
+
+def asegurar_jornada(usuario, fecha):
+    """Solo crea la jornada pendiente; no inventa eventos ni horas a partir de su orden."""
+    qs = MarcacionBiometrica.objects.filter(usuario=usuario, fecha_hora__date=fecha, es_valida=True).order_by("fecha_hora")
+    primera, ultima = qs.first(), qs.last()
+    if not primera:
+        return None, False
+    return ResumenAsistenciaDiaria.objects.get_or_create(
+        usuario=usuario, fecha=fecha,
+        defaults={
+            "primera_entrada": timezone.localtime(primera.fecha_hora).time(),
+            "ultima_salida": timezone.localtime(ultima.fecha_hora).time() if ultima.pk != primera.pk else None,
+            "turno_aplicado": usuario.turno,
+            "observaciones": "Marcaciones importadas. Límites de consulta tomados de primera y última marca; entrada, salida y tiempos pendientes de revisión.",
+        },
+    )
+
+
+class ZKTecoExcelParser:
+    def __init__(self, archivo_path_o_bytes, nombre_archivo, subido_por=None):
         self.archivo = archivo_path_o_bytes
         self.nombre_archivo = nombre_archivo
         self.subido_por = subido_por
-        self.turnos = list(TurnoHorario.objects.filter(activo=True))
-        self.turno_default_admin = (
-            TurnoHorario.objects.filter(es_para_conductores=False, activo=True).first()
-            or TurnoHorario(
-                nombre="Administrativo Estándar",
-                hora_entrada=time(8, 0),
-                hora_salida=time(18, 0),
-                tolerancia_minutos=15,
-                hora_inicio_refrigerio=time(13, 0),
-                hora_fin_refrigerio=time(14, 0),
-            )
-        )
 
-    def procesar(self) -> Dict[str, Any]:
-        """
-        Punto de entrada principal. Inspecciona el archivo Excel y aplica
-        la estrategia de lectura adecuada (Tabular ZKSoftware, Multi-Pestañas por Empleado, o Matriz Mensual).
-        """
-        xls = pd.ExcelFile(self.archivo)
-        sheet_names = xls.sheet_names
-
-        resultado = {
-            "archivo": self.nombre_archivo,
-            "hojas_encontradas": len(sheet_names),
-            "filas_procesadas": 0,
-            "empleados_identificados": 0,
-            "total_he_25": Decimal("0.00"),
-            "total_he_35": Decimal("0.00"),
-            "total_vueltas_choferes": 0,
-            "resumenes_generados": 0,
-            "alertas": [],
-            "exito": True,
-        }
-
-        # Analizar si es una tabla plana única o un Excel con múltiples hojas por trabajador
-        if len(sheet_names) == 1:
-            df = pd.read_excel(self.archivo, sheet_name=0)
-            self._procesar_hoja_tabular(df, resultado)
-        else:
-            # Procesar múltiples hojas (ej. cada pestaña es el nombre o DNI de un colaborador)
-            for nombre_hoja in sheet_names:
-                df = pd.read_excel(self.archivo, sheet_name=nombre_hoja)
-                self._procesar_hoja_individual(df, nombre_hoja, resultado)
-
-        # Registrar auditoría de la carga en base de datos
-        with transaction.atomic():
-            mes_periodo = datetime.now().strftime("%Y-%m")
-            carga_audit = CargaArchivoAsistencia.objects.create(
-                nombre_archivo_original=self.nombre_archivo,
-                subido_por=self.subido_por,
-                mes_periodo=mes_periodo,
-                total_filas_procesadas=resultado["filas_procesadas"],
-                total_empleados_identificados=resultado["empleados_identificados"],
-                total_horas_extras_25=resultado["total_he_25"],
-                total_horas_extras_35=resultado["total_he_35"],
-                total_vueltas_conductores=resultado["total_vueltas_choferes"],
-                estado=CargaArchivoAsistencia.EstadoCarga.COMPLETADO,
-                detalle_log="\n".join(resultado["alertas"][:50]),
-            )
-            resultado["carga_id"] = carga_audit.id
-
-        return resultado
-
-    def _procesar_hoja_tabular(self, df: pd.DataFrame, resultado: Dict[str, Any]):
-        """Procesa archivos con formato de lista/exportación estándar ZKTeco."""
-        # Normalizar nombres de columnas a minúsculas sin espacios
-        df.columns = [str(c).strip().lower().replace(" ", "_").replace("-", "_") for c in df.columns]
-
-        # Mapeo flexible de columnas comunes en software ZK
-        col_dni = next((c for c in df.columns if c in ["dni", "ac_no", "ac_no.", "user_id", "id", "enrol_no", "enroll_no"]), None)
-        col_nombre = next((c for c in df.columns if c in ["nombre", "name", "empleado", "colaborador", "trabajador"]), None)
-        col_fecha_hora = next((c for c in df.columns if c in ["time", "fecha_hora", "fecha/hora", "datetime", "timestamp", "fecha"]), None)
-        col_hora = next((c for c in df.columns if c in ["hora", "time_only"]), None)
-        col_tipo = next((c for c in df.columns if c in ["state", "tipo", "evento", "action", "new_state"]), None)
-        col_vueltas = next((c for c in df.columns if c in ["vueltas", "vuelta", "ruta", "recorrido"]), None)
-
-        if not col_dni and not col_nombre:
-            # Si no tiene columnas estándar, intentar parsing heurístico
-            self._procesar_matriz_general(df, resultado)
-            return
-
-        agrupados_por_persona = {}
-
-        for _, row in df.iterrows():
-            dni_raw = str(row.get(col_dni, "")).strip() if col_dni else ""
-            nombre_raw = str(row.get(col_nombre, "")).strip() if col_nombre else ""
-            
-            # Limpiar DNI eliminando posibles decimales como "48039773.0"
-            if "." in dni_raw:
-                dni_raw = dni_raw.split(".")[0]
-            dni_raw = dni_raw.zfill(8) if len(dni_raw) <= 8 and dni_raw.isdigit() else dni_raw
-
-            # Extraer Fecha y Hora
-            val_fh = row.get(col_fecha_hora)
-            dt_marcacion = None
-
-            if pd.notna(val_fh):
-                if isinstance(val_fh, datetime):
-                    dt_marcacion = val_fh
-                else:
+    def leer(self):
+        """Validar todo el archivo antes de realizar escrituras."""
+        registros, ignoradas, errores = [], [], []
+        if hasattr(self.archivo, "seek"):
+            self.archivo.seek(0)
+        with pd.ExcelFile(self.archivo) as libro:
+            hojas = list(libro.sheet_names)
+            for hoja in hojas:
+                df = pd.read_excel(libro, sheet_name=hoja, dtype=object)
+                columnas = {normalizar(c): c for c in df.columns}
+                def buscar(*alias):
+                    return next((columnas[a] for a in alias if a in columnas), None)
+                codigo = buscar("no", "dni", "acno", "userid", "id", "enrolno", "enrollno")
+                fecha = buscar("fechahora", "datetime", "timestamp", "time", "fecha")
+                nombre = buscar("nombre", "name", "empleado", "trabajador")
+                equipo = buscar("idequipo", "equipo", "deviceid")
+                estado = buscar("estado", "state", "tipo", "evento")
+                verificacion = buscar("codverificacion", "verificacion", "verify")
+                if codigo is None or fecha is None:
+                    ignoradas.append(hoja.strip())
+                    continue
+                for posicion, (_, fila) in enumerate(df.iterrows(), 2):
+                    code, valor_fecha = texto(fila[codigo]), fila[fecha]
+                    if not code and pd.isna(valor_fecha):
+                        continue
                     try:
-                        dt_marcacion = pd.to_datetime(val_fh).to_pydatetime()
-                    except Exception:
-                        pass
-
-            if dt_marcacion is None and col_hora and pd.notna(row.get(col_hora)):
-                try:
-                    dt_marcacion = pd.to_datetime(str(val_fh) + " " + str(row.get(col_hora))).to_pydatetime()
-                except Exception:
-                    pass
-
-            if dt_marcacion is None:
-                continue
-
-            # Tipo de evento
-            tipo_ev = MarcacionBiometrica.TipoEvento.ENTRADA
-            if col_tipo and pd.notna(row.get(col_tipo)):
-                t_str = str(row.get(col_tipo)).upper()
-                if "OUT" in t_str or "SALIDA" in t_str:
-                    tipo_ev = MarcacionBiometrica.TipoEvento.SALIDA
-
-            vueltas_val = str(row.get(col_vueltas, "0")).strip().upper() if col_vueltas and pd.notna(row.get(col_vueltas)) else "0"
-
-            clave = dni_raw if dni_raw else nombre_raw
-            if not clave:
-                continue
-
-            if clave not in agrupados_por_persona:
-                agrupados_por_persona[clave] = {
-                    "dni": dni_raw,
-                    "nombre": nombre_raw,
-                    "marcaciones": [],
-                    "vueltas_especiales": vueltas_val,
-                }
-
-            agrupados_por_persona[clave]["marcaciones"].append({
-                "fecha_hora": dt_marcacion,
-                "tipo_evento": tipo_ev,
-                "vueltas": vueltas_val,
-            })
-            resultado["filas_procesadas"] += 1
-
-        resultado["empleados_identificados"] = len(agrupados_por_persona)
-
-        # Consolidar diariamente cada colaborador
-        for clave, info in agrupados_por_persona.items():
-            self._consolidar_asistencia_empleado(info, resultado)
-
-    def _procesar_hoja_individual(self, df: pd.DataFrame, nombre_hoja: str, resultado: Dict[str, Any]):
-        """Procesa una pestaña individual correspondiente a un empleado específico."""
-        df.columns = [str(c).strip().lower() for c in df.columns]
-        # Buscar usuario por nombre de hoja o contenido
-        dni = ""
-        nombre = nombre_hoja.strip()
-
-        # Si el nombre de la hoja tiene números (posible DNI)
-        if any(char.isdigit() for char in nombre_hoja):
-            digitos = "".join([c for c in nombre_hoja if c.isdigit()])
-            if len(digitos) >= 8:
-                dni = digitos[:8]
-
-        info = {
-            "dni": dni,
-            "nombre": nombre,
-            "marcaciones": [],
-            "vueltas_especiales": "0",
-        }
-
-        # Buscar filas con fechas y horas en la hoja
-        for _, row in df.iterrows():
-            valores = [str(v) for v in row.values if pd.notna(v)]
-            for val in valores:
-                try:
-                    dt = pd.to_datetime(val)
-                    if dt.year >= 2024:
-                        info["marcaciones"].append({
-                            "fecha_hora": dt.to_pydatetime(),
-                            "tipo_evento": MarcacionBiometrica.TipoEvento.ENTRADA,
-                            "vueltas": "0",
+                        if not code or len(code) > 60:
+                            raise ValueError("Falta el código del trabajador o supera 60 caracteres")
+                        if isinstance(valor_fecha, (int, float)) or pd.isna(valor_fecha):
+                            raise ValueError("La fecha debe ser una fecha y hora, no un número o una celda vacía")
+                        if isinstance(valor_fecha, datetime):
+                            fh = valor_fecha
+                        elif isinstance(valor_fecha, str) and re.search(r"\d{4}", valor_fecha):
+                            fh = pd.to_datetime(valor_fecha, dayfirst=not bool(re.match(r"^\d{4}-", valor_fecha))).to_pydatetime()
+                        else:
+                            raise ValueError("La fecha no contiene un año y una hora válidos")
+                        if not (2000 <= fh.year <= timezone.localdate().year + 1):
+                            raise ValueError("El año de la marcación está fuera del intervalo admitido")
+                        if timezone.is_naive(fh):
+                            fh = timezone.make_aware(fh, timezone.get_default_timezone())
+                        else:
+                            fh = timezone.localtime(fh)
+                        registros.append({
+                            "hoja": hoja, "fila": posicion, "sede": hoja.strip().upper(),
+                            "codigo": code, "fecha_hora": fh,
+                            "nombre": texto(fila[nombre]) if nombre else "",
+                            "equipo": texto(fila[equipo]) if equipo else "",
+                            "estado": texto(fila[estado]) if estado else "",
+                            "verificacion": texto(fila[verificacion]) if verificacion else "",
+                            "original": {str(k): (v.isoformat() if isinstance(v, (datetime, date)) else texto(v)) for k, v in fila.items()},
                         })
-                        resultado["filas_procesadas"] += 1
-                except Exception:
-                    pass
+                    except (ValueError, TypeError, OverflowError) as exc:
+                        errores.append(f"{hoja.strip()}, fila {posicion}: {exc}.")
+        if errores:
+            raise ValidationError(errores[:15] + ([f"Hay {len(errores)} filas con errores. No se importó ninguna."] if len(errores) > 15 else []))
+        if not registros:
+            raise ValidationError("No hay hojas con columnas de código y Fecha/Hora. Seleccione la exportación original por sedes.")
+        return registros, hojas, ignoradas
 
-        if info["marcaciones"]:
-            resultado["empleados_identificados"] += 1
-            self._consolidar_asistencia_empleado(info, resultado)
-
-    def _procesar_matriz_general(self, df: pd.DataFrame, resultado: Dict[str, Any]):
-        """Procesamiento de respaldo para matrices libres."""
-        resultado["alertas"].append("Se procesó la hoja con motor heurístico general.")
-
-    def _consolidar_asistencia_empleado(self, info: dict, resultado: Dict[str, Any]):
-        """Calcula horas trabajadas, HH.EE. 25%, HH.EE. 35%, horas nocturnas y vueltas."""
-        dni = info["dni"]
-        nombre = info["nombre"]
-        marcaciones = info["marcaciones"]
-
-        if not marcaciones:
-            return
-
-        # Intentar asociar con un Usuario registrado en SISMOC
-        usuario = None
-        if dni:
-            usuario = Usuario.objects.filter(dni=dni).first()
-        if not usuario and nombre:
-            # Buscar por coincidencia parcial de nombres
-            usuario = Usuario.objects.filter(
-                first_name__icontains=nombre.split()[0]
-            ).first()
-
-        # Si el usuario no existe en la BD aún, crear un perfil provisional para no perder la asistencia
-        if not usuario:
-            dni_generado = dni if (dni and len(dni) == 8 and dni.isdigit()) else f"TEMP{resultado['empleados_identificados']:04d}"
-            username_generado = f"user_{dni_generado.lower()}"
-            usuario, _ = Usuario.objects.get_or_create(
-                dni=dni_generado,
+    @transaction.atomic
+    def procesar(self):
+        registros, hojas, ignoradas = self.leer()
+        periodo = Counter(r["fecha_hora"].strftime("%Y-%m") for r in registros).most_common(1)[0][0]
+        carga = CargaArchivoAsistencia.objects.create(
+            nombre_archivo_original=self.nombre_archivo, subido_por=self.subido_por,
+            mes_periodo=periodo, estado="PROCESANDO",
+        )
+        identidades, nuevas, repetidas, jornadas = {}, 0, 0, set()
+        eventos = {
+            "entrada": "ENTRADA", "checkin": "ENTRADA", "salida": "SALIDA", "checkout": "SALIDA",
+            "salidarefrigerio": "SALIDA_REFRIGERIO", "retornorefrigerio": "RETORNO_REFRIGERIO",
+        }
+        for r in registros:
+            clave = (r["sede"], r["equipo"], r["codigo"])
+            if clave not in identidades:
+                usuario = None
+                # El DNI solo se usa si coincide exactamente con un usuario ya registrado.
+                if re.fullmatch(r"\d{8}", r["codigo"]):
+                    usuario = Usuario.objects.filter(dni=r["codigo"]).first()
+                identidad, _ = IdentidadBiometrica.objects.get_or_create(
+                    sede=r["sede"], equipo=r["equipo"], codigo=r["codigo"],
+                    defaults={"nombre": r["nombre"], "usuario": usuario},
+                )
+                if not identidad.usuario_id and usuario:
+                    identidad.usuario = usuario
+                    identidad.save(update_fields=["usuario"])
+                identidades[clave] = identidad
+            identidad = identidades[clave]
+            # Los códigos locales cortos se delimitan por sede y equipo.
+            # Para códigos de ocho dígitos, una misma lectura copiada en otra hoja
+            # conserva un evento y todas las filas de procedencia.
+            alcance = "GLOBAL8" if re.fullmatch(r"\d{8}", r["codigo"]) else r["sede"]
+            huella = sha256("|".join([alcance, r["equipo"], r["codigo"], r["fecha_hora"].isoformat(), r["estado"], r["verificacion"]]).encode()).hexdigest()
+            marca, creada = MarcacionBiometrica.objects.get_or_create(
+                huella_importacion=huella,
                 defaults={
-                    "username": username_generado,
-                    "first_name": nombre if nombre else "Personal",
-                    "last_name": "El Cumbe",
-                    "rol": Usuario.Rol.CONDUCTOR if "CHOFER" in nombre.upper() or "COND" in nombre.upper() else Usuario.Rol.ADMINISTRATIVO,
+                    "usuario": identidad.usuario, "identidad_biometrica": identidad,
+                    "dni": identidad.usuario.dni if identidad.usuario_id else "",
+                    "nombre_empleado": identidad.nombre or r["nombre"],
+                    "zkteco_user_id": int(r["codigo"]) if r["codigo"].isdigit() and len(r["codigo"]) <= 9 else None,
+                    "fecha_hora": r["fecha_hora"], "tipo_evento": eventos.get(normalizar(r["estado"]), "SIN_CLASIFICAR"),
+                    "origen": "EXCEL_ZKTECO", "carga_origen": carga,
+                    "estado_reportado": r["estado"][:60], "verificacion_reportada": r["verificacion"][:40],
                 },
             )
-
-        es_conductor = (usuario.rol == Usuario.Rol.CONDUCTOR)
-
-        # Agrupar marcaciones por fecha
-        por_fecha = {}
-        for m in marcaciones:
-            f = m["fecha_hora"].date()
-            if f not in por_fecha:
-                por_fecha[f] = []
-            por_fecha[f].append(m)
-
-        for fecha_dia, lista_m in por_fecha.items():
-            lista_m.sort(key=lambda x: x["fecha_hora"])
-            primera_m = lista_m[0]["fecha_hora"]
-            ultima_m = lista_m[-1]["fecha_hora"]
-
-            primera_hora = primera_m.time()
-            ultima_hora = ultima_m.time() if len(lista_m) > 1 else None
-
-            # Guardar cada marcación biométrica individual en la base de datos
-            for m in lista_m:
-                MarcacionBiometrica.objects.get_or_create(
-                    dni=usuario.dni,
-                    fecha_hora=m["fecha_hora"],
-                    defaults={
-                        "usuario": usuario,
-                        "nombre_empleado": usuario.nombre_completo,
-                        "tipo_evento": m["tipo_evento"],
-                        "origen": MarcacionBiometrica.OrigenMarcacion.EXCEL_ZKTECO,
-                    },
-                )
-
-            # Lógica diferenciada: Conductor vs Personal Administrativo
-            if es_conductor:
-                # ==============================================================
-                # CÁLCULO DE VUELTAS DE CHOFER (Evita error #¿NOMBRE? de Excel)
-                # ==============================================================
-                # Si en el log se registró 'X' o 'XX' o por conteo de salidas
-                vueltas_codigo = "0"
-                total_vueltas = 0
-
-                # Detección de vuelta simple 'X' o doble 'XX'
-                for m in lista_m:
-                    v_raw = m.get("vueltas", "0").upper()
-                    if "XX" in v_raw or v_raw == "2":
-                        vueltas_codigo = "XX"
-                        total_vueltas = 2
-                        break
-                    elif "X" in v_raw or v_raw == "1":
-                        vueltas_codigo = "X"
-                        total_vueltas = 1
-
-                # Si no vino explícito pero tiene marcaciones de entrada y retorno en el día
-                if total_vueltas == 0 and len(lista_m) >= 2:
-                    horas_span = (ultima_m - primera_m).total_seconds() / 3600.0
-                    if horas_span >= 10:
-                        vueltas_codigo = "XX"
-                        total_vueltas = 2
-                    elif horas_span >= 4:
-                        vueltas_codigo = "X"
-                        total_vueltas = 1
-
-                resultado["total_vueltas_choferes"] += total_vueltas
-
-                ResumenAsistenciaDiaria.objects.update_or_create(
-                    usuario=usuario,
-                    fecha=fecha_dia,
-                    defaults={
-                        "primera_entrada": primera_hora,
-                        "ultima_salida": ultima_hora,
-                        "minutos_tardanza": 0,
-                        "horas_trabajadas": Decimal("8.00") if total_vueltas > 0 else Decimal("0.00"),
-                        "horas_extras_25": Decimal("0.00"),
-                        "horas_extras_35": Decimal("0.00"),
-                        "horas_nocturnas": Decimal("0.00"),
-                        "vueltas_codigo": vueltas_codigo,
-                        "total_vueltas_num": total_vueltas,
-                        "estado": ResumenAsistenciaDiaria.EstadoAsistencia.ASISTIO if total_vueltas > 0 else ResumenAsistenciaDiaria.EstadoAsistencia.DESCANSO_SUTRAN,
-                        "observaciones": f"Vuelta operativa: {vueltas_codigo} ({total_vueltas} servicio(s))",
-                    },
-                )
-                resultado["resumenes_generados"] += 1
-
-            else:
-                # ==============================================================
-                # CÁLCULO DE ADMINISTRATIVOS (HH.EE. 25%, 35%, Nocturnas y Tardanzas)
-                # ==============================================================
-                hora_esperada = self.turno_default_admin.hora_entrada
-                tolerancia = self.turno_default_admin.tolerancia_minutos
-
-                # Cálculo de tardanza
-                min_tardanza = 0
-                if primera_hora > hora_esperada:
-                    diff_minutos = (
-                        datetime.combine(fecha_dia, primera_hora)
-                        - datetime.combine(fecha_dia, hora_esperada)
-                    ).total_seconds() / 60.0
-                    if diff_minutos > tolerancia:
-                        min_tardanza = int(diff_minutos)
-
-                # Cálculo de horas trabajadas y extras
-                horas_efectivas = Decimal("0.00")
-                he_25 = Decimal("0.00")
-                he_35 = Decimal("0.00")
-                he_nocturnas = Decimal("0.00")
-
-                if ultima_hora:
-                    dt_inicio = datetime.combine(fecha_dia, primera_hora)
-                    dt_fin = datetime.combine(fecha_dia, ultima_hora)
-                    total_horas = max(0.0, (dt_fin - dt_inicio).total_seconds() / 3600.0)
-
-                    # Descontar refrigerio de 1 hora si la jornada supera 6 horas
-                    if total_horas > 6.0:
-                        total_horas -= 1.0
-
-                    horas_efectivas = Decimal(f"{total_horas:.2f}")
-
-                    # Jornada ordinaria máxima legal en Perú: 8 horas diarias
-                    if total_horas > 8.0:
-                        horas_excedentes = total_horas - 8.0
-                        # Primeras 2 horas al 25%
-                        he25_val = min(2.0, horas_excedentes)
-                        he_25 = Decimal(f"{he25_val:.2f}")
-
-                        # A partir de la 3ra hora al 35%
-                        if horas_excedentes > 2.0:
-                            he35_val = horas_excedentes - 2.0
-                            he_35 = Decimal(f"{he35_val:.2f}")
-
-                    # Cálculo de horas nocturnas (22:00 a 06:00)
-                    if ultima_hora >= time(22, 0):
-                        dt_22 = datetime.combine(fecha_dia, time(22, 0))
-                        nocturnas_val = (dt_fin - dt_22).total_seconds() / 3600.0
-                        he_nocturnas = Decimal(f"{max(0.0, nocturnas_val):.2f}")
-
-                resultado["total_he_25"] += he_25
-                resultado["total_he_35"] += he_35
-
-                estado_dia = (
-                    ResumenAsistenciaDiaria.EstadoAsistencia.TARDANZA
-                    if min_tardanza > 0
-                    else ResumenAsistenciaDiaria.EstadoAsistencia.ASISTIO
-                )
-
-                ResumenAsistenciaDiaria.objects.update_or_create(
-                    usuario=usuario,
-                    fecha=fecha_dia,
-                    defaults={
-                        "primera_entrada": primera_hora,
-                        "ultima_salida": ultima_hora,
-                        "minutos_tardanza": min_tardanza,
-                        "horas_trabajadas": horas_efectivas,
-                        "horas_extras_25": he_25,
-                        "horas_extras_35": he_35,
-                        "horas_nocturnas": he_nocturnas,
-                        "vueltas_codigo": "0",
-                        "total_vueltas_num": 0,
-                        "estado": estado_dia,
-                        "observaciones": f"Tardanza: {min_tardanza} min | HE 25%: {he_25}h | HE 35%: {he_35}h",
-                    },
-                )
-                resultado["resumenes_generados"] += 1
+            if not creada and marca.usuario_id and identidad.usuario_id and marca.usuario_id != identidad.usuario_id:
+                raise ValidationError(f"El código {r['codigo']} tiene asociaciones contradictorias. Revise las identidades antes de importar.")
+            FilaImportacionBiometrica.objects.create(
+                carga=carga, marcacion=marca, identidad=identidad, hoja=r["hoja"], fila=r["fila"], repetida=not creada, datos_originales=r["original"],
+            )
+            nuevas += int(creada)
+            repetidas += int(not creada)
+            if creada and identidad.usuario_id:
+                jornadas.add((identidad.usuario_id, timezone.localtime(r["fecha_hora"]).date()))
+        generadas = 0
+        for uid, fecha in jornadas:
+            _, creada = asegurar_jornada(Usuario.objects.get(pk=uid), fecha)
+            generadas += int(creada)
+        pendientes = sum(not i.trabajador_id for i in identidades.values())
+        alertas = ["Las horas no se calculan durante la importación. Revise la clasificación de las marcaciones."]
+        if pendientes:
+            alertas.append(f"{pendientes} códigos biométricos guardados pendientes de vincular a una ficha de trabajador.")
+        if ignoradas:
+            alertas.append("Hojas sin formato de exportación omitidas: " + ", ".join(ignoradas))
+        carga.total_filas_procesadas = len(registros)
+        carga.total_empleados_identificados = len({i.usuario_id for i in identidades.values() if i.usuario_id})
+        carga.estado = "COMPLETADO"
+        carga.detalle_log = f"Nuevas: {nuevas}; repetidas: {repetidas}; códigos: {len(identidades)}.\n" + "\n".join(alertas)
+        carga.save()
+        return {
+            "archivo": self.nombre_archivo, "carga_id": carga.pk, "hojas_encontradas": len(hojas),
+            "filas_procesadas": len(registros), "empleados_identificados": carga.total_empleados_identificados,
+            "codigos_biometricos": len(identidades), "identidades_pendientes": pendientes,
+            "marcaciones_nuevas": nuevas, "marcaciones_repetidas": repetidas,
+            "total_he_25": Decimal(0), "total_he_35": Decimal(0), "total_vueltas_choferes": 0,
+            "resumenes_generados": generadas, "alertas": alertas, "exito": True,
+        }

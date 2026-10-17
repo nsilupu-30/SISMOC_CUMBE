@@ -605,7 +605,7 @@
     
 
     </style>
-    <link rel="stylesheet" href="{% static 'asistencia.css' %}">
+    <link rel="stylesheet" href="{% static 'asistencia.css' %}?v=20261017-aprobacion-5">
 </head>
 <body>
 
@@ -627,7 +627,13 @@
             <li class="menu-item">
                 <button class="menu-link active" onclick="mostrarSeccion('dashboard')">
                     <span class="menu-icon">⚡</span>
-                    <span>Dashboard & Huellero</span>
+                    <span>Dashboard</span>
+                </button>
+            </li>
+            <li class="menu-item">
+                <button class="menu-link" onclick="mostrarSeccion('huellero')">
+                    <span class="menu-icon">⚡</span>
+                    <span>Huellero en tiempo real</span>
                 </button>
             </li>
             <li class="menu-item">
@@ -721,15 +727,6 @@
                 <p>Prácticas Pre Profesionales (1IS101) • Universidad Señor de Sipán • RUC: 20480397731</p>
             </div>
 
-            <div class="top-actions">
-                <div class="badge-huellero" id="estadoHuellero" id="zkPulseBadge">
-                    <span>ZKTeco <strong>{{ info_huellero.dispositivo_ip }}:{{ info_huellero.dispositivo_puerto }} · {{ info_huellero.estado_dispositivo }}</strong></span>
-                </div>
-                <button class="btn-cumbe" onclick="abrirModal()">
-                    📱 Marcar Presencia
-                </button>
-
-            </div>
         </header>
 
         <!-- Mensajes Flash de Django (Bienvenida / Avisos RBAC) -->
@@ -747,7 +744,19 @@
             </div>
         {% endif %}
 
-        <p class="ayuda">Periodo de los indicadores de horas y revisión: <strong>{{ filtros.desde }} al {{ filtros.hasta }}</strong>. <a href="?vista=asistencia" style="color:#7dd3fc">Consultar otro periodo</a></p>
+        <!-- ===============================================================
+             DASHBOARD GENERAL Y HUELLERO EN APARTADOS INDEPENDIENTES
+        =============================================================== -->
+        <div id="view-dashboard" class="view-section active">
+            <div class="panel-header-custom"><div><h3 class="panel-title-text">Dashboard general</h3><p class="ayuda">Estadísticas de asistencia y operación. Los nuevos módulos incorporarán sus indicadores cuando estén disponibles.</p></div></div>
+            <form method="get" class="filtros-asistencia filtros-dashboard">
+                <input type="hidden" name="vista" value="dashboard">
+                <label>Desde<input type="date" name="desde" value="{{ filtros.desde }}" required></label>
+                <label>Hasta<input type="date" name="hasta" value="{{ filtros.hasta }}" required></label>
+                <button type="submit" class="btn-cumbe">Consultar estadísticas</button>
+            </form>
+            {% if filtros.error %}<p class="aviso aviso-error" role="alert">{{ filtros.error }}</p>{% endif %}
+        <p class="ayuda">Periodo de horas, jornadas y servicios: <strong>{{ filtros.desde }} al {{ filtros.hasta }}</strong>. Personal activo y marcaciones de hoy se muestran por separado.</p>
         <!-- Tarjetas KPI Resumen -->
         <div class="kpi-grid">
             <div class="kpi-box">
@@ -779,57 +788,11 @@
             </div>
         </div>
 
-        <!-- ===============================================================
-             SECCION 1: DASHBOARD & TIEMPO REAL (HUELLERO ZKTECO)
-        =============================================================== -->
-        <div id="view-dashboard" class="view-section active">
-            <div class="content-panel">
-                <div class="panel-header-custom">
-                    <div class="panel-title-text">
-                        <span>⚡</span>
-                        <span>Marcaciones guardadas hoy ({{ info_huellero.fecha_consulta }})</span>
-                    </div>
-                    {% if puede_gestionar %}<button class="btn-cumbe" onclick="sincronizarZKTeco()" id="btnSync">
-                        Consultar conexión del equipo
-                    </button>{% endif %}
-                </div>
+            {% include 'dashboard/modulos.html' %}
+        </div>
 
-                <p class="ayuda" id="detalleHuellero">Última comprobación: {{ info_huellero.ultima_comprobacion }}. Última sincronización: {{ info_huellero.ultima_sincronizacion }}. {{ info_huellero.mensaje }}</p>
-                <div class="table-responsive">
-                    <table class="custom-dark-table" id="tablaZkLive">
-                        <thead>
-                            <tr>
-                                <th>DNI</th>
-                                <th>Colaborador</th>
-                                <th>Rol Oficial</th>
-                                <th>Sede / Agencia</th>
-                                <th>Hora de Entrada</th>
-                                <th>Origen</th>
-                                <th>Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for c in info_huellero.colaboradores_presentes %}
-                            <tr>
-                                <td><strong>{{ c.dni }}</strong></td>
-                                <td>{{ c.nombre }}</td>
-                                <td><span class="status-pill pill-cyan">{{ c.rol_display }}</span></td>
-                                <td>{{ c.agencia_sede }}</td>
-                                <td><strong>{{ c.primera_marcacion }}</strong></td>
-                                <td><span class="status-pill pill-purple">{{ c.origen }}</span></td>
-                                <td><span class="status-pill pill-emerald">{{ c.estado_asistencia }}</span></td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 25px;">
-                                    No hay marcaciones guardadas para hoy.
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+        <div id="view-huellero" class="view-section">
+            {% include 'asistencia/huellero.html' %}
         </div>
 
         <!-- ===============================================================
@@ -929,6 +892,7 @@
                     <!-- Dinamico con JS -->
                 </div>
             </div>
+            {% include 'asistencia/identidades.html' %}
         </div>
 
         <!-- ===============================================================
@@ -1144,6 +1108,7 @@
         </div>
     </div>
 
+    <script src="{% static 'huellero.js' %}"></script>
     <!-- Scripts de Interacción -->
     <script>
         function mostrarSeccion(seccionId) {
@@ -1155,6 +1120,10 @@
             const target = document.getElementById('view-' + seccionId);
             if (target) {
                 target.classList.add('active');
+                const url = new URL(window.location.href);
+                url.searchParams.set('vista', seccionId);
+                history.replaceState(null, '', url);
+                activarHuellero(seccionId === 'huellero');
             }
         }
 
@@ -1178,6 +1147,7 @@
                 const data = await res.json();
                 document.getElementById('estadoHuellero').textContent = 'ZKTeco · ' + data.estado_dispositivo;
                 document.getElementById('detalleHuellero').textContent = 'Última comprobación: ' + data.ultima_comprobacion + '. Última sincronización: ' + data.ultima_sincronizacion + '. ' + data.mensaje;
+                await actualizarRegistrosHuellero();
             } catch (err) {
                 document.getElementById('detalleHuellero').textContent = err.message;
             } finally {
@@ -1230,7 +1200,12 @@
 
             if (res.ok) {
                 const data = await res.json();
-                box.textContent = 'Archivo: ' + data.archivo + '. Filas procesadas: ' + data.filas_procesadas + '. Trabajadores identificados: ' + data.empleados_identificados + '. Revise las jornadas antes de aprobarlas.';
+                box.textContent = 'Archivo: ' + data.archivo + '. Filas: ' + data.filas_procesadas + '. Marcas nuevas: ' + data.marcaciones_nuevas + '. Repetidas: ' + data.marcaciones_repetidas + '. Códigos guardados: ' + data.codigos_biometricos + '. Pendientes de identificar: ' + data.identidades_pendientes + '. ' + data.alertas.join(' ');
+                const enlace = document.createElement('a');
+                enlace.href = '?vista=excel-zk';
+                enlace.textContent = ' Ver códigos guardados y asociar trabajadores';
+                enlace.style.color = '#7dd3fc';
+                box.appendChild(enlace);
             } else {
                 const error = await res.json(); box.textContent = error.detail || 'Error al procesar el archivo Excel.';
             }

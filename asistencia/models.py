@@ -60,6 +60,7 @@ class MarcacionBiometrica(models.Model):
     """
 
     class TipoEvento(models.TextChoices):
+        SIN_CLASIFICAR = "SIN_CLASIFICAR", _("Por clasificar")
         ENTRADA = "ENTRADA", _("🟢 Entrada a Laborar")
         SALIDA = "SALIDA", _("🔴 Salida de Laborar")
         SALIDA_REFRIGERIO = "SALIDA_REFRIGERIO", _("☕ Salida a Refrigerio")
@@ -70,6 +71,7 @@ class MarcacionBiometrica(models.Model):
         EXCEL_ZKTECO = "EXCEL_ZKTECO", _("📂 Archivo Excel ZKTeco (Batch)")
         APP_MOVIL_GPS = "APP_MOVIL_GPS", _("📱 App Móvil (Facial + GPS)")
         KIOSKO_PIN = "KIOSKO_PIN", _("🖥️ Kiosko de Terminal (PIN/DNI)")
+        SISTEMA_MANUAL = "SISTEMA_MANUAL", _("Registro manual en el sistema")
 
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -81,6 +83,8 @@ class MarcacionBiometrica(models.Model):
     )
     dni = models.CharField(
         max_length=8,
+        blank=True,
+        default="",
         db_index=True,
         verbose_name="DNI del Trabajador",
     )
@@ -152,6 +156,28 @@ class MarcacionBiometrica(models.Model):
         auto_now_add=True,
         verbose_name="Fecha de Registro en Servidor",
     )
+    identidad_biometrica = models.ForeignKey(
+        "IdentidadBiometrica", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="marcaciones",
+    )
+    huella_importacion = models.CharField(max_length=64, null=True, blank=True, unique=True)
+    estado_reportado = models.CharField(max_length=60, blank=True)
+    verificacion_reportada = models.CharField(max_length=40, blank=True)
+    registrada_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="marcaciones_manuales")
+    motivo_manual = models.TextField(blank=True)
+    evidencia_manual_url = models.URLField(blank=True, max_length=500)
+
+    @property
+    def departamento_reportado(self):
+        """Conserva las denominaciones originales, incluso en cargas anteriores."""
+        nombres = []
+        for fila in self.filas_origen.all():
+            for clave, valor in fila.datos_originales.items():
+                if clave.strip().casefold() in {"departmento", "departamento", "department", "compañía", "compania", "company", "empresa"}:
+                    nombre = str(valor).strip() if valor is not None else ""
+                    if nombre and nombre not in nombres:
+                        nombres.append(nombre)
+        return " / ".join(nombres)
 
     class Meta:
         db_table = "asistencia_marcacion"
@@ -167,6 +193,74 @@ class MarcacionBiometrica(models.Model):
         return f"{self.dni} | {self.fecha_hora.strftime('%d/%m/%Y %H:%M:%S')} | {self.get_tipo_evento_display()}"
 
 
+def generar_codigo_trabajador():
+    from uuid import uuid4
+    return "TRA-" + uuid4().hex[:12].upper()
+
+
+class Trabajador(models.Model):
+    nombre_completo = models.CharField(max_length=150)
+    dni = models.CharField(max_length=8, unique=True)
+    area = models.CharField(max_length=100)
+    sede = models.CharField(max_length=100, blank=True)
+    usuario = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="ficha_trabajador")
+    creado_el = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["nombre_completo", "pk"]
+
+    def __str__(self):
+        return f"{self.nombre_completo} · {self.dni}"
+
+    @property
+    def codigo(self):
+        return " / ".join(sorted({identidad.codigo for identidad in self.identidades.all()})) or "Sin código importado"
+
+    @property
+    def agencia_sede(self):
+        return self.sede
+
+    @property
+    def turno(self):
+        return self.usuario.turno if self.usuario_id else None
+
+    @property
+    def rol(self):
+        return self.usuario.rol if self.usuario_id else "ADMINISTRATIVO"
+
+    def get_rol_display(self):
+        return self.area
+
+
+class IdentidadBiometrica(models.Model):
+    sede = models.CharField(max_length=100)
+    equipo = models.CharField(max_length=60, blank=True)
+    codigo = models.CharField(max_length=60)
+    nombre = models.CharField(max_length=150, blank=True)
+    trabajador = models.ForeignKey(Trabajador, null=True, blank=True, on_delete=models.PROTECT, related_name="identidades")
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="identidades_biometricas")
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["sede", "equipo", "codigo"], name="identidad_sede_equipo_codigo")]
+        ordering = ["sede", "equipo", "codigo"]
+
+    def __str__(self):
+        return f"{self.sede} / {self.equipo} / {self.codigo} — {self.nombre or 'Por identificar'}"
+
+
+class FilaImportacionBiometrica(models.Model):
+    carga = models.ForeignKey("CargaArchivoAsistencia", on_delete=models.CASCADE, related_name="filas_origen")
+    marcacion = models.ForeignKey(MarcacionBiometrica, on_delete=models.PROTECT, related_name="filas_origen")
+    identidad = models.ForeignKey(IdentidadBiometrica, on_delete=models.PROTECT)
+    hoja = models.CharField(max_length=100)
+    fila = models.PositiveIntegerField()
+    repetida = models.BooleanField(default=False)
+    datos_originales = models.JSONField(default=dict)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["carga", "hoja", "fila"], name="fila_importacion_origen_unica")]
+
+
 class ResumenAsistenciaDiaria(models.Model):
     """
     Consolidado diario por trabajador calculado automáticamente mediante el algoritmo
@@ -176,6 +270,8 @@ class ResumenAsistenciaDiaria(models.Model):
     """
 
     class EstadoAsistencia(models.TextChoices):
+        FERIADO = "FERIADO", _("Feriado no laborado")
+        POR_REVISAR = "POR_REVISAR", _("Por revisar marcaciones")
         ASISTIO = "ASISTIO", _("✅ Asistió Normal")
         TARDANZA = "TARDANZA", _("⚠️ Tardanza")
         FALTA = "FALTA", _("❌ Falta Injustificada")
@@ -190,7 +286,9 @@ class ResumenAsistenciaDiaria(models.Model):
         on_delete=models.CASCADE,
         related_name="resumenes_asistencia",
         verbose_name="Colaborador",
+        null=True, blank=True,
     )
+    trabajador = models.ForeignKey(Trabajador, null=True, blank=True, on_delete=models.PROTECT, related_name="jornadas")
     fecha = models.DateField(db_index=True, verbose_name="Fecha de Asistencia")
     
     # Horas registradas en el día
@@ -282,13 +380,21 @@ class ResumenAsistenciaDiaria(models.Model):
         verbose_name_plural = "Resúmenes de Asistencia Diaria (Planilla)"
         ordering = ["-fecha", "usuario__last_name"]
         unique_together = ("usuario", "fecha")
+        constraints = [
+            models.UniqueConstraint(fields=["trabajador", "fecha"], name="jornada_trabajador_fecha_unica"),
+            models.CheckConstraint(condition=models.Q(usuario__isnull=False) | models.Q(trabajador__isnull=False), name="jornada_tiene_persona"),
+        ]
         indexes = [
             models.Index(fields=["fecha", "estado"]),
             models.Index(fields=["usuario", "fecha"]),
         ]
 
     def __str__(self):
-        return f"{self.fecha.strftime('%d/%m/%Y')} | {self.usuario.nombre_completo} | {self.get_estado_display()} | Vueltas: {self.vueltas_codigo}"
+        return f"{self.fecha.strftime('%d/%m/%Y')} | {self.persona.nombre_completo} | {self.get_estado_display()} | Vueltas: {self.vueltas_codigo}"
+
+    @property
+    def persona(self):
+        return self.trabajador or self.usuario
 
 
 class CargaArchivoAsistencia(models.Model):

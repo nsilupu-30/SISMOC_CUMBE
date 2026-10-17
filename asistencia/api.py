@@ -57,6 +57,8 @@ def registrar_marcacion(request, data: MarcacionCreateSchema):
         raise HttpError(400, "Tipo de evento no válido.")
     if data.origen not in MarcacionBiometrica.OrigenMarcacion.values:
         raise HttpError(400, "Origen de marcación no válido.")
+    if data.origen == "SISTEMA_MANUAL":
+        raise HttpError(400, "Use Agregar marcación manual en el detalle de la jornada para registrar su responsable y justificación.")
     usuario = Usuario.objects.filter(dni=dni).first()
 
     ahora = timezone.localtime(timezone.now())
@@ -167,9 +169,9 @@ def listar_resumenes_asistencia(
     usuario_actual = request.auth
     from asistencia.services.revision import puede_gestionar
     if usuario_actual and not puede_gestionar(usuario_actual):
-        queryset = queryset.filter(usuario=usuario_actual)
+        queryset = queryset.filter(Q(usuario=usuario_actual) | Q(trabajador__usuario=usuario_actual))
     elif dni:
-        queryset = queryset.filter(usuario__dni=dni.strip())
+        queryset = queryset.filter(Q(usuario__dni=dni.strip()) | Q(trabajador__dni=dni.strip()))
 
     if fecha_inicio:
         queryset = queryset.filter(fecha__gte=fecha_inicio)
@@ -222,48 +224,25 @@ def reporte_planilla_consolidado(
         sum_vueltas=Sum("total_vueltas_num"),
     )
 
-    # Agrupar por empleado
-    usuarios_ids = queryset.values_list("usuario_id", flat=True).distinct()
+    from asistencia.views import consolidar
+    grupos = consolidar(queryset)
     desglose = []
-
-    for uid in usuarios_ids:
-        u = Usuario.objects.get(id=uid)
-        u_qs = queryset.filter(usuario=u)
-        u_tot = u_qs.aggregate(
-            horas=Sum("horas_trabajadas"),
-            he25=Sum("horas_extras_25"),
-            he35=Sum("horas_extras_35"),
-            noct=Sum("horas_nocturnas"),
-            tardanza=Sum("minutos_tardanza"),
-            vueltas=Sum("total_vueltas_num"),
-            dias=Count("id"),
-        )
-        desglose.append({
-            "usuario_id": u.id,
-            "dni": u.dni,
-            "nombre_completo": u.nombre_completo,
-            "rol": u.rol,
-            "rol_display": u.get_rol_display(),
-            "dias_asistidos": u_tot["dias"] or 0,
-            "total_horas": float(u_tot["horas"] or 0),
-            "horas_extras_25": float(u_tot["he25"] or 0),
-            "horas_extras_35": float(u_tot["he35"] or 0),
-            "horas_nocturnas": float(u_tot["noct"] or 0),
-            "minutos_tardanza": u_tot["tardanza"] or 0,
-            "total_vueltas_chofer": u_tot["vueltas"] or 0,
-        })
-
-    from asistencia.services.revision import valores_ajustados
     ajustados = {"horas_trabajadas": Decimal(0), "horas_extras_25": Decimal(0), "horas_extras_35": Decimal(0), "horas_nocturnas": Decimal(0)}
-    for fila in desglose:
-        registros = [r for r in queryset if r.usuario_id == fila["usuario_id"]]
-        valores = [valores_ajustados(r) for r in registros]
+    for fila in grupos:
+        persona = fila["usuario"]
+        desglose.append({
+            "usuario_id": persona.usuario_id if hasattr(persona, "usuario_id") else persona.pk,
+            "trabajador_id": persona.pk if hasattr(persona, "usuario_id") else None,
+            "dni": persona.dni, "nombre_completo": persona.nombre_completo,
+            "rol": persona.rol, "rol_display": persona.get_rol_display(),
+            "dias_asistidos": fila["jornadas"], "total_horas": float(fila["horas_trabajadas"]),
+            "horas_extras_25": float(fila["horas_extras_25"]), "horas_extras_35": float(fila["horas_extras_35"]),
+            "horas_nocturnas": float(fila["horas_nocturnas"]), "minutos_tardanza": fila["tardanza"],
+            "total_vueltas_chofer": sum(r.total_vueltas_num for r in queryset if r.persona.dni == persona.dni),
+            "jornadas_aprobadas": fila["aprobadas"], "jornadas_pendientes": fila["pendientes"] + fila["observadas"],
+        })
         for campo in ajustados:
-            total = sum((v[campo] for v in valores), Decimal(0))
-            fila["total_horas" if campo == "horas_trabajadas" else campo] = float(total)
-            ajustados[campo] += total
-        fila["jornadas_aprobadas"] = sum(r.verificado_contabilidad for r in registros)
-        fila["jornadas_pendientes"] = sum(not r.verificado_contabilidad for r in registros)
+            ajustados[campo] += fila[campo]
 
     return {
         "periodo": periodo_str,

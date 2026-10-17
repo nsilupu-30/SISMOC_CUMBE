@@ -2,18 +2,47 @@
 from datetime import timedelta
 from django.db.models.signals import pre_save, pre_delete, post_save, post_delete
 from django.dispatch import receiver
+from django.db.models import Q
 from django.utils import timezone
 from asistencia.models import (
     ResumenAsistenciaDiaria, MarcacionBiometrica, IncidenciaAsistencia,
     AjusteAsistencia, CorreccionEvento, RevisionAsistencia,
 )
 from asistencia.services.revision import comprobar_abierto, ventana_jornada
+from core.models import Usuario
+
+
+@receiver(post_save, sender=Usuario)
+def ficha_para_cuenta_existente(sender, instance, raw=False, **kwargs):
+    if raw or not instance.dni or len(instance.dni) != 8 or not instance.dni.isascii() or not instance.dni.isdigit():
+        return
+    from asistencia.models import Trabajador
+    if Trabajador.objects.filter(usuario=instance).exists():
+        return
+    ficha, _ = Trabajador.objects.get_or_create(dni=instance.dni, defaults={
+        "nombre_completo": instance.nombre_completo[:150], "area": "Por completar",
+        "sede": instance.agencia_sede, "usuario": instance,
+    })
+    if ficha.usuario_id is None:
+        ficha.usuario = instance
+        ficha.save(update_fields=["usuario"])
+
+
+def resumenes_de_marca(marca):
+    consulta = Q(pk__in=[])
+    if marca.usuario_id:
+        consulta |= Q(usuario_id=marca.usuario_id) | Q(trabajador__usuario_id=marca.usuario_id)
+    if marca.identidad_biometrica_id:
+        consulta |= Q(trabajador__identidades__pk=marca.identidad_biometrica_id)
+    if marca.pk:
+        consulta |= Q(trabajador__identidades__marcaciones=marca) | Q(trabajador__identidades__filaimportacionbiometrica__marcacion=marca)
+    return ResumenAsistenciaDiaria.objects.filter(consulta).distinct()
 
 
 def fechas_marca(instance):
     dia = timezone.localtime(instance.fecha_hora).date()
     comprobar_abierto(dia)
-    for r in ResumenAsistenciaDiaria.objects.filter(usuario_id=instance.usuario_id, fecha=dia - timedelta(days=1)):
+    for r in resumenes_de_marca(instance).filter(fecha=dia - timedelta(days=1)):
         inicio, fin = ventana_jornada(r)
         if inicio <= instance.fecha_hora <= fin:
             comprobar_abierto(r.fecha)
@@ -26,7 +55,7 @@ def proteger_resumen(sender, instance, **kwargs):
         original = sender.objects.filter(pk=instance.pk).first()
         if original:
             comprobar_abierto(original.fecha)
-            campos = ("usuario_id", "fecha", "primera_entrada", "ultima_salida", "horas_trabajadas", "horas_extras_25", "horas_extras_35", "horas_nocturnas", "minutos_tardanza", "turno_aplicado_id", "estado", "observaciones")
+            campos = ("usuario_id", "trabajador_id", "fecha", "primera_entrada", "ultima_salida", "horas_trabajadas", "horas_extras_25", "horas_extras_35", "horas_nocturnas", "minutos_tardanza", "turno_aplicado_id", "estado", "observaciones")
             if any(getattr(original, c) != getattr(instance, c) for c in campos):
                 sender.objects.filter(pk=instance.pk).update(verificado_contabilidad=False, estado_revision="PENDIENTE", revisado_por=None, fecha_revision=None)
                 instance.verificado_contabilidad = False
@@ -37,6 +66,8 @@ def proteger_resumen(sender, instance, **kwargs):
 
 @receiver(pre_save, sender=MarcacionBiometrica)
 def proteger_marca(sender, instance, **kwargs):
+    if timezone.is_naive(instance.fecha_hora):
+        instance.fecha_hora = timezone.make_aware(instance.fecha_hora, timezone.get_default_timezone())
     fechas_marca(instance)
     if instance.pk:
         original = sender.objects.filter(pk=instance.pk).first()
@@ -63,7 +94,7 @@ def invalidar_por_marcacion(sender, instance, **kwargs):
     marca = instance.marcacion if isinstance(instance, CorreccionEvento) else instance
     for fuente in [marca, getattr(marca, "_marca_anterior", marca)]:
         dia = timezone.localtime(fuente.fecha_hora).date()
-        qs = ResumenAsistenciaDiaria.objects.filter(usuario_id=fuente.usuario_id, fecha__range=(dia - timedelta(days=1), dia))
+        qs = resumenes_de_marca(fuente).filter(fecha__range=(dia - timedelta(days=1), dia))
         for r in qs:
             inicio, fin = ventana_jornada(r)
             if inicio <= fuente.fecha_hora <= fin and r.verificado_contabilidad:

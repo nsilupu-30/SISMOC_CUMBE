@@ -9,7 +9,31 @@ from asistencia.models import (
     MarcacionBiometrica,
     ResumenAsistenciaDiaria,
     CargaArchivoAsistencia,
+    IdentidadBiometrica,
+    Trabajador,
 )
+
+
+@admin.register(Trabajador)
+class TrabajadorAdmin(admin.ModelAdmin):
+    list_display = ("codigo", "nombre_completo", "dni", "area", "sede")
+    search_fields = ("identidades__codigo", "nombre_completo", "dni", "area")
+    readonly_fields = ("codigo", "creado_el")
+
+
+@admin.register(IdentidadBiometrica)
+class IdentidadBiometricaAdmin(admin.ModelAdmin):
+    list_display = ("sede", "equipo", "codigo", "nombre", "usuario")
+    search_fields = ("codigo", "nombre", "sede")
+    list_filter = ("sede",)
+    # La pantalla de importación realiza la asociación con su historial y marcaciones.
+    readonly_fields = ("sede", "equipo", "codigo", "nombre", "usuario", "trabajador")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(TurnoHorario)

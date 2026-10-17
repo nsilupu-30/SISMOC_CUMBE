@@ -61,8 +61,49 @@ class RevisionAsistenciaTests(TestCase):
         self.assertContains(res, "08:15:00")
         self.assertContains(res, "00:45:00")
         self.assertContains(res, "Aprobar jornada")
+        self.assertContains(res, "Cuadro de control diario · Formato del Excel")
+        self.assertContains(res, "Feriado y/o descanso")
         self.assertEqual(res.context["total_jornadas"], 1)
         self.assertEqual([r.usuario_id for r in res.context["pagina_asistencia"]], [self.empleado.pk])
+
+    def test_cuadro_excel_reproduce_horas_de_carlos(self):
+        self.turno.hora_fin_refrigerio = time(13)
+        self.turno.save()
+        self.resumen.primera_entrada = time(3, 40, 11)
+        self.resumen.ultima_salida = time(15, 10, 9)
+        self.resumen.save()
+        MarcacionBiometrica.objects.filter(usuario=self.empleado).delete()
+        for hora, tipo in [(time(3, 40, 11), "ENTRADA"), (time(12, 23, 19), "SALIDA_REFRIGERIO"), (time(12, 53, 39), "RETORNO_REFRIGERIO"), (time(15, 10, 9), "SALIDA")]:
+            MarcacionBiometrica.objects.create(usuario=self.empleado, dni=self.empleado.dni, fecha_hora=timezone.make_aware(datetime.combine(self.dia, hora)), tipo_evento=tipo)
+        cuadro = detalle_jornada(self.resumen)["cuadro_excel"]
+        self.assertEqual(cuadro["refrigerio"], "00:30:20")
+        for campo, esperado in {"trabajo": "10:59:38", "base": "08:00:00", "saldo": "02:59:38", "he25": "02:00:00", "he35": "00:59:38", "nocturnas": "02:19:49"}.items():
+            self.assertEqual(cuadro["totales"][campo], esperado, campo)
+        self.assertTrue(cuadro["filas"][2]["es_refrigerio"])
+
+    def test_cuadro_excel_incompleto_no_inventa_totales(self):
+        cuadro = detalle_jornada(self.resumen_otro)["cuadro_excel"]
+        for campo in ["trabajo", "saldo", "he25", "he35", "nocturnas"]:
+            self.assertEqual(cuadro["totales"][campo], "Por revisar")
+        self.assertEqual(cuadro["descuento"], "Sin registro")
+
+    def test_cuadro_excel_deficit_no_genera_extras_negativas(self):
+        MarcacionBiometrica.objects.filter(usuario=self.empleado, tipo_evento="SALIDA").update(fecha_hora=timezone.make_aware(datetime.combine(self.dia, time(15, 45))))
+        cuadro = detalle_jornada(self.resumen)["cuadro_excel"]
+        self.assertEqual(cuadro["totales"]["saldo"], "−01:00:00")
+        self.assertEqual(cuadro["totales"]["he25"], "00:00:00")
+        self.assertEqual(cuadro["totales"]["he35"], "00:00:00")
+        self.assertEqual(cuadro["descuento"], "Sin registro")
+
+    def test_jornada_base_ocho_horas_aunque_horario_abarque_nueve(self):
+        self.turno.hora_inicio_refrigerio = None
+        self.turno.hora_fin_refrigerio = None
+        self.turno.save()
+        cuadro = detalle_jornada(self.resumen)["cuadro_excel"]
+        self.assertEqual(cuadro["totales"]["base"], "08:00:00")
+        self.assertEqual(cuadro["totales"]["trabajo"], "08:15:00")
+        self.assertEqual(cuadro["totales"]["he25"], "00:15:00")
+        self.assertEqual(cuadro["totales"]["he35"], "00:00:00")
 
     def test_fecha_invalida_muestra_error(self):
         self.client.force_login(self.contadora)
@@ -133,6 +174,37 @@ class RevisionAsistenciaTests(TestCase):
         marca.refresh_from_db()
         self.assertEqual(marca.tipo_evento, "SALIDA")
         self.assertEqual(CorreccionEvento.objects.get(marcacion=marca).tipo_evento, "SALIDA_REFRIGERIO")
+
+    def test_clasificar_marcacion_laboral_sin_motivo(self):
+        marca = MarcacionBiometrica.objects.get(usuario=self.empleado, tipo_evento="SALIDA")
+        self.client.force_login(self.admin)
+        respuesta = self.post_jornada(accion="corregir_evento", marcacion_id=marca.pk, tipo_evento="SALIDA_REFRIGERIO")
+        self.assertEqual(respuesta.status_code, 302)
+        correccion = CorreccionEvento.objects.get(marcacion=marca)
+        self.assertEqual(correccion.tipo_evento, "SALIDA_REFRIGERIO")
+        self.assertEqual(correccion.responsable, self.admin)
+        self.assertEqual(correccion.motivo, "Clasificación de marcación laboral.")
+
+    def test_guardar_todas_las_correcciones_del_dia_y_recalcular(self):
+        MarcacionBiometrica.objects.filter(usuario=self.empleado).update(tipo_evento="SIN_CLASIFICAR")
+        datos = {"accion": "corregir_eventos"}
+        for marca, tipo in zip(MarcacionBiometrica.objects.filter(usuario=self.empleado).order_by("fecha_hora"), ["ENTRADA", "SALIDA_REFRIGERIO", "RETORNO_REFRIGERIO", "SALIDA"]):
+            datos[f"evento_{marca.pk}"] = tipo
+            datos[f"original_{marca.pk}"] = "SIN_CLASIFICAR"
+        self.client.force_login(self.contadora)
+        self.assertEqual(self.post_jornada(**datos).status_code, 302)
+        self.assertEqual(CorreccionEvento.objects.count(), 4)
+        self.resumen.refresh_from_db()
+        self.assertEqual(self.resumen.horas_trabajadas, Decimal("8.25"))
+        self.assertEqual(self.resumen.horas_extras_25, Decimal("0.25"))
+        self.assertFalse(self.resumen.verificado_contabilidad)
+        self.assertTrue(detalle_jornada(self.resumen)["completa"])
+
+    def test_correccion_conjunta_rechaza_marcas_de_otro_trabajador(self):
+        ajena = MarcacionBiometrica.objects.create(usuario=self.otro, dni=self.otro.dni, fecha_hora=timezone.make_aware(datetime.combine(self.dia, time(9))))
+        self.client.force_login(self.contadora)
+        self.post_jornada(accion="corregir_eventos", **{f"evento_{ajena.pk}": "SALIDA", f"original_{ajena.pk}": "ENTRADA"})
+        self.assertFalse(CorreccionEvento.objects.exists())
 
     def test_asociacion_conserva_identificador_reportado(self):
         marca = MarcacionBiometrica.objects.create(dni="00000039", fecha_hora=timezone.make_aware(datetime.combine(self.dia, time(7))))
@@ -251,3 +323,48 @@ class RevisionAsistenciaTests(TestCase):
         res = self.client.get("/api/asistencia/reporte-planilla", {"fecha_inicio": self.dia.isoformat(), "fecha_fin": self.dia.isoformat()}, HTTP_AUTHORIZATION=f"Bearer {token}")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(Decimal(str(res.json()["total_horas_extras_25"])), Decimal("0.25"))
+
+    def test_dashboard_separa_indicadores_y_registro_huellero(self):
+        self.client.force_login(self.contadora)
+        res = self.client.get(reverse("dashboard"), self.filtros)
+        self.assertEqual(res.status_code, 200)
+        html = res.content.decode()
+        dashboard = html.split('<div id="view-dashboard"', 1)[1].split('<div id="view-huellero"', 1)[0]
+        huellero = html.split('<div id="view-huellero"', 1)[1].split('<div id="view-asistencia"', 1)[0]
+        self.assertIn("Dashboard general", dashboard)
+        self.assertIn("Indicadores de próximos sprints", dashboard)
+        self.assertNotIn('id="tablaZkLive"', dashboard)
+        self.assertNotIn('id="btnSync"', dashboard)
+        self.assertIn('id="tablaZkLive"', huellero)
+        self.assertIn('id="btnSync"', huellero)
+        self.assertNotIn('class="kpi-grid"', huellero)
+
+    def test_huellero_muestra_eventos_sin_agrupar_personas(self):
+        ahora = timezone.now()
+        for tipo in ["ENTRADA", "SALIDA_REFRIGERIO", "RETORNO_REFRIGERIO", "SALIDA"]:
+            MarcacionBiometrica.objects.create(usuario=self.empleado, dni=self.empleado.dni, fecha_hora=ahora, tipo_evento=tipo, origen="ZKTECO_EN_LINEA")
+        MarcacionBiometrica.objects.create(usuario=self.empleado, dni=self.empleado.dni, fecha_hora=ahora, origen="KIOSKO_PIN")
+        self.client.force_login(self.contadora)
+        res = self.client.get(reverse("registros_huellero"))
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["total"], 4)
+        self.assertEqual(len(res.json()["registros"]), 4)
+        self.assertEqual(res["Cache-Control"], "no-store")
+
+    def test_huellero_restringe_registros_al_empleado(self):
+        ahora = timezone.now()
+        for u in [self.empleado, self.otro]:
+            MarcacionBiometrica.objects.create(usuario=u, dni=u.dni, fecha_hora=ahora, origen="ZKTECO_EN_LINEA")
+        self.client.force_login(self.empleado)
+        res = self.client.get(reverse("registros_huellero"))
+        self.assertEqual(res.json()["total"], 1)
+        self.assertEqual(res.json()["registros"][0]["dni"], self.empleado.dni)
+
+    def test_huellero_consulta_sin_crear_marcas_y_exige_sesion(self):
+        res = self.client.get(reverse("registros_huellero"))
+        self.assertEqual(res.status_code, 302)
+        self.client.force_login(self.contadora)
+        antes = MarcacionBiometrica.objects.count()
+        with patch.object(ZKTecoLiveClient, "probar_conexion", side_effect=AssertionError("El refresco no debe contactar el reloj")):
+            self.assertEqual(self.client.get(reverse("registros_huellero")).status_code, 200)
+        self.assertEqual(MarcacionBiometrica.objects.count(), antes)

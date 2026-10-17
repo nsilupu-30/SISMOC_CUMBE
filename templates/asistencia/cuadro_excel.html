@@ -1,0 +1,31 @@
+{% load static %}
+<div class="cuadro-control-excel">
+    <div class="panel-header-custom"><div><h4>Cuadro de control diario · Formato del Excel</h4><p class="ayuda">Duraciones en HH:MM:SS. Los intervalos se calculan entre marcas válidas consecutivas. El total trabajado excluye el refrigerio y requiere una secuencia de eventos completa.</p></div><span class="status-pill pill-cyan">{{ d.resumen.fecha|date:'d/m/Y' }}</span></div>
+    <form method="post" action="{% url 'accion_jornada' d.resumen.pk %}" class="formulario-vertical correcciones-cuadro-excel">
+        {% csrf_token %}{% include 'asistencia/_filtros_post.html' %}<input type="hidden" name="accion" value="corregir_eventos">
+    <div class="table-responsive">
+        <table class="custom-dark-table tabla-control-excel">
+            <caption class="visually-hidden">Control diario con los campos del Excel: código, fecha, intervalos, refrigerio, base, saldo, extras, nocturnidad y feriado o descanso.</caption>
+            <thead><tr><th>Código / DNI</th><th>Fecha/Hora</th><th>Evento</th><th>Duración del intervalo</th><th>Refrigerio</th><th>Jornada base</th><th>Saldo de jornada</th><th>HH.EE. 25 %<small>Primeras 2 h</small></th><th>HH.EE. 35 %<small>Exceso de 2 h</small></th><th>Horas nocturnas<small>22:00–06:00</small></th><th>Feriado y/o descanso</th></tr></thead>
+            <tbody>{% for fila in d.cuadro_excel.filas %}<tr class="{% if fila.es_refrigerio %}marca-refrigerio{% endif %}"><td>{{ fila.codigo }}</td><td>{{ fila.fecha_hora|date:'d/m/Y H:i:s' }}</td><td>{% if puede_gestionar and not d.cerrada and fila.valida %}<input type="hidden" name="original_{{ fila.marcacion_id }}" value="{{ fila.evento_codigo }}"><select name="evento_{{ fila.marcacion_id }}" aria-label="Evento del {{ fila.fecha_hora|date:'d/m/Y H:i:s' }}">{% for codigo, nombre in tipos_evento %}<option value="{{ codigo }}" {% if codigo == fila.evento_codigo %}selected{% endif %}>{{ nombre }}</option>{% endfor %}</select>{% else %}{{ fila.evento }}{% endif %}{% if fila.es_manual %}<small class="marca-manual-indicador">Registro manual</small>{% endif %}{% if not fila.valida %}<small>Invalidada; no interviene en el cálculo</small>{% endif %}</td><td>{{ fila.intervalo }}</td><td>{% if fila.es_refrigerio %}<span class="status-pill pill-orange">REFRIGERIO</span>{% else %}—{% endif %}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>{% empty %}<tr><td colspan="11" class="estado-vacio">No hay marcaciones disponibles para reconstruir el cuadro de esta jornada.</td></tr>{% endfor %}</tbody>
+            <tfoot><tr><th colspan="3">Total trabajado y conceptos del día</th><td>{{ d.cuadro_excel.totales.trabajo }}</td><td>{{ d.cuadro_excel.refrigerio }}</td><td>{{ d.cuadro_excel.totales.base }}</td><td class="{% if d.cuadro_excel.totales.es_deficit %}saldo-deficit{% else %}saldo-jornada{% endif %}">{{ d.cuadro_excel.totales.saldo }}{% if d.cuadro_excel.totales.es_deficit %}<small>Tiempo faltante</small>{% endif %}</td><td>{{ d.cuadro_excel.totales.he25 }}</td><td>{{ d.cuadro_excel.totales.he35 }}</td><td>{{ d.cuadro_excel.totales.nocturnas }}</td><td>{{ d.cuadro_excel.totales.feriado }}</td></tr></tfoot>
+        </table>
+    </div>
+    {% if puede_gestionar and not d.cerrada and d.cuadro_excel.filas %}<button class="btn-cumbe" type="submit">Guardar todas las correcciones</button>{% endif %}
+    </form>
+    {% if puede_gestionar and not d.cerrada %}
+    <details class="agregar-marcacion-manual"><summary>Agregar marcación manual</summary>
+        <p class="ayuda">Use esta opción solo para una hora faltante confirmada. Se conservarán las marcas originales y el nuevo registro tendrá origen «Registro manual en el sistema». Guardar no aprueba la jornada.</p>
+        <form method="post" action="{% url 'accion_jornada' d.resumen.pk %}" class="formulario-vertical formulario-marcacion-manual">
+            {% csrf_token %}{% include 'asistencia/_filtros_post.html' %}<input type="hidden" name="accion" value="marcacion_manual">
+            {% for campo in d.form_marca_manual %}<label>{{ campo.label }}{{ campo }}</label>{% endfor %}
+            <button class="btn-cumbe" type="submit">Guardar marcación manual y validar</button>
+        </form>
+    </details>
+    <script src="{% static 'marcacion_manual.js' %}?v=20261017-1" defer></script>
+    {% endif %}
+    <p class="ayuda">Jornada base fija: 08:00:00 de trabajo efectivo. Saldo = trabajo reconstruido − 08:00:00; el refrigerio se excluye del tiempo trabajado. Un saldo negativo se muestra con signo y no genera horas extras negativas. Al guardar las correcciones se actualizan los cálculos completos, sin aprobar automáticamente la jornada. Las horas nocturnas pueden coincidir con las extras.</p>
+    <dl class="resumen-tiempos-detalle"><dt>Descuento de tiempo aprobado</dt><dd>{{ d.cuadro_excel.descuento }}</dd><dt>Compensación de tiempo aprobada</dt><dd>{{ d.cuadro_excel.compensacion }}</dd></dl>
+    <p class="ayuda">Feriado, descanso trabajado, descuentos y compensaciones toman los ajustes aprobados. Los importes en soles no se calculan en este cuadro.</p>
+    <details><summary>Descansos y observaciones del día</summary><p>{{ d.resumen.get_estado_display }} · {{ d.resumen.observaciones|default:'Sin observaciones registradas.' }}</p>{% for incidencia in d.cuadro_excel.incidencias %}<p>{{ incidencia.get_tipo_display }}: {{ incidencia.motivo }} · {% if incidencia.aprobado_el %}Aprobada{% else %}Pendiente{% endif %}</p>{% endfor %}</details>
+</div>
