@@ -99,20 +99,337 @@ dialog:modal { position: fixed; inset: 0; margin: auto; max-width: calc(100vw - 
 .envio-asistencia { padding: 18px; border: 1px solid #334155; border-radius: 12px; margin: 16px 0 24px; }
 .envio-asistencia button:disabled { opacity: .5; cursor: not-allowed; }
 
-.revision-trabajador-dialog { width: min(1440px, calc(100vw - 40px)); padding: 24px; border: 1px solid #475569; border-radius: 16px; background: #101d30; color: #e2e8f0; box-sizing: border-box; overflow: auto; }
-.revision-trabajador-dialog::backdrop { background: rgba(0, 0, 0, .75); }
-.revision-trabajador-dialog h3 { font-size: 1.25rem; }
+.revision-trabajador-dialog, .modal-envio-asistencia-dialog { width: min(1440px, calc(100vw - 40px)); padding: 24px; border: 1px solid #475569; border-radius: 16px; background: #101d30; color: #e2e8f0; box-sizing: border-box; overflow: auto; }
+.revision-trabajador-dialog::backdrop, .modal-envio-asistencia-dialog::backdrop { background: rgba(0, 0, 0, .75); }
+.revision-trabajador-dialog h3, .modal-envio-asistencia-dialog h3, .modal-marcaciones-dialog h3 { font-size: 1.25rem; }
 .revision-trabajador-dialog h4 { margin: 24px 0 14px; }
 .marcas-trabajador-periodo { max-height: 48vh; overflow: auto; }
 .marcas-trabajador-periodo thead { position: sticky; top: 0; z-index: 1; }
 .marcas-trabajador-periodo select { min-width: 230px; }
-.revision-trabajador-dialog .formulario-linea label { flex: 1 1 250px; display: flex; flex-direction: column; gap: 8px; }
+.revision-trabajador-dialog .formulario-linea label, .modal-envio-asistencia-dialog .formulario-linea label { flex: 1 1 250px; display: flex; flex-direction: column; gap: 8px; }
 .tabla-trabajadores-asistencia .btn-dark-outline { white-space: nowrap; }
-@media(max-width: 600px) { .revision-trabajador-dialog { width: calc(100vw - 16px); padding: 16px; } }
+@media(max-width: 600px) { .revision-trabajador-dialog, .modal-envio-asistencia-dialog { width: calc(100vw - 16px); padding: 16px; } }
 
 .detalle-jornada-dialog { width: min(1500px, calc(100vw - 40px)); padding: 16px; border: 1px solid #475569; border-radius: 16px; background: #101d30; color: #e2e8f0; box-sizing: border-box; overflow: auto; }
 .detalle-jornada-dialog::backdrop { background: rgba(0, 0, 0, .75); }
 .detalle-jornada-dialog > .content-panel { margin: 0; }
+
+/* Modal de marcaciones biométricas por código (popup estético) */
+.modal-marcaciones-dialog {
+    width: min(1200px, calc(100vw - 32px));
+    max-height: min(88vh, 800px);
+    padding: 24px;
+    border: 1px solid #475569;
+    border-radius: 16px;
+    background: #101d30;
+    color: #e2e8f0;
+    box-sizing: border-box;
+    overflow: auto;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+}
+.modal-marcaciones-dialog::backdrop {
+    background: rgba(8, 15, 26, 0.8);
+    backdrop-filter: blur(5px);
+}
+.modal-marcaciones-inner {
+    display: flex;
+    flex-direction: column;
+    max-height: min(88vh, 760px);
+    overflow: hidden;
+}
+.modal-marcaciones-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 24px;
+    background: #14243d;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.modal-marcaciones-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+}
+.modal-marcaciones-icon-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(232, 116, 0, 0.15);
+    color: #ff9d3b;
+    border: 1px solid rgba(232, 116, 0, 0.35);
+    flex-shrink: 0;
+}
+.modal-marcaciones-info-col {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+.modal-marcaciones-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.modal-marcaciones-title {
+    margin: 0;
+    font-size: 1.08rem;
+    font-weight: 700;
+    color: #f8fafc;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.modal-marcaciones-codigo-tag {
+    background: rgba(232, 116, 0, 0.22);
+    color: #ff9d3b;
+    border: 1px solid rgba(232, 116, 0, 0.45);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+.modal-marcaciones-separador {
+    color: #475569;
+}
+.modal-marcaciones-nombre {
+    color: #e2e8f0;
+    font-weight: 600;
+}
+.modal-marcaciones-chips-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.modal-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 3px 9px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    white-space: nowrap;
+}
+.modal-chip-count {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.12);
+    border-color: rgba(56, 189, 248, 0.3);
+    font-weight: 600;
+}
+.modal-chip-trabajador {
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.08);
+}
+.modal-marcaciones-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+.btn-cerrar-modal-head {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+    color: #cbd5e1;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 140ms ease;
+}
+.btn-cerrar-modal-head span {
+    font-size: 1.2rem;
+    line-height: 1;
+    margin-top: -1px;
+}
+.btn-cerrar-modal-head:hover {
+    background: rgba(239, 68, 68, 0.18);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+}
+.modal-marcaciones-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    background: #0a1422;
+}
+.modal-marcaciones-scroll {
+    overflow-y: auto;
+    max-height: calc(min(88vh, 760px) - 85px);
+}
+.modal-marcaciones-tabla {
+    width: 100%;
+    margin: 0 !important;
+    border-collapse: collapse;
+}
+.modal-marcaciones-tabla thead th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #14243d;
+    color: #94a3b8;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 12px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.modal-marcaciones-tabla tbody td {
+    padding: 12px 18px;
+    font-size: 0.85rem;
+    color: #e2e8f0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    vertical-align: middle;
+}
+.modal-marcaciones-tabla tbody tr:hover td {
+    background: rgba(255, 255, 255, 0.035);
+}
+.modal-cell-time {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.modal-cell-time strong {
+    color: #f1f5f9;
+    font-size: 0.85rem;
+}
+.modal-cell-time span {
+    font-size: 0.78rem;
+    color: #ff9d3b;
+    font-family: monospace;
+    font-weight: 600;
+}
+.badge-evento-zk {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.badge-evento-zk.evento-entrada {
+    background: rgba(16, 185, 129, 0.16);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.badge-evento-zk.evento-salida {
+    background: rgba(245, 158, 11, 0.16);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+.badge-evento-zk.evento-otro {
+    background: rgba(148, 163, 184, 0.16);
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+.badge-estado-zk {
+    color: #94a3b8;
+    font-size: 0.8rem;
+}
+.badge-verif-zk {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.07);
+    color: #93c5fd;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: monospace;
+}
+.badge-lote-zk {
+    color: #64748b;
+    font-size: 0.78rem;
+    font-family: monospace;
+}
+.empty-state-modal {
+    padding: 48px 20px;
+    text-align: center;
+    color: #64748b;
+}
+.empty-state-modal svg {
+    margin-bottom: 12px;
+    opacity: 0.6;
+}
+
+@media (max-width: 768px) {
+    .modal-marcaciones-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .modal-marcaciones-header-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+
+/* Adaptación a tema claro */
+html[data-theme="light"] .modal-marcaciones-dialog {
+    background: #ffffff;
+    color: #1e293b;
+    border-color: #cbd5e1;
+    box-shadow: 0 24px 64px rgba(23, 33, 47, 0.2);
+}
+html[data-theme="light"] .modal-marcaciones-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.45);
+}
+html[data-theme="light"] .modal-marcaciones-header {
+    background: #f8fafc;
+    border-bottom-color: #e2e8f0;
+}
+html[data-theme="light"] .modal-marcaciones-title {
+    color: #0f172a;
+}
+html[data-theme="light"] .modal-marcaciones-nombre {
+    color: #1e293b;
+}
+html[data-theme="light"] .modal-chip {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #e2e8f0;
+}
+html[data-theme="light"] .btn-cerrar-modal-head {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #334155;
+}
+html[data-theme="light"] .btn-cerrar-modal-head:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #dc2626;
+}
+html[data-theme="light"] .modal-marcaciones-body {
+    background: #ffffff;
+}
+html[data-theme="light"] .modal-marcaciones-tabla thead th {
+    background: #f1f5f9;
+    color: #64748b;
+    border-bottom-color: #e2e8f0;
+}
+html[data-theme="light"] .modal-marcaciones-tabla tbody td {
+    color: #334155;
+    border-bottom-color: #f1f5f9;
+}
+html[data-theme="light"] .modal-marcaciones-tabla tbody tr:hover td {
+    background: #f8fafc;
+}
+html[data-theme="light"] .modal-cell-time strong {
+    color: #0f172a;
+}
 
 .tabla-control-excel select { min-width: 225px; width: 100%; }
 .correcciones-cuadro-excel > .btn-cumbe { justify-self: start; }

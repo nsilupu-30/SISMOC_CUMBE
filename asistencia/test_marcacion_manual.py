@@ -86,3 +86,34 @@ class MarcacionManualTests(TestCase):
         self.contadora.rol = 'ADMINISTRATIVO'
         self.contadora.save()
         self.assertEqual(self.client.post(self.url, self.datos).status_code, 403)
+
+    def test_registro_sin_elegir_codigo_ni_enlace(self):
+        datos = {k: v for k, v in self.datos.items() if k not in {'identidad_manual', 'evidencia_manual_url'}}
+        self.client.post(self.url, datos)
+        marca = MarcacionBiometrica.objects.get(origen='SISTEMA_MANUAL')
+        self.assertEqual(marca.identidad_biometrica, self.identidad)
+        self.assertEqual(marca.evidencia_manual_url, '')
+
+    def test_codigo_automatico_procede_de_las_marcas_de_ese_dia(self):
+        IdentidadBiometrica.objects.create(sede='CHICLAYO', equipo='2', codigo='99', trabajador=self.ficha)
+        datos = {k: v for k, v in self.datos.items() if k not in {'identidad_manual', 'evidencia_manual_url'}}
+        self.client.post(self.url, datos)
+        marca = MarcacionBiometrica.objects.get(origen='SISTEMA_MANUAL')
+        self.assertEqual(marca.identidad_biometrica, self.identidad)
+
+    def test_eliminar_marcacion_manual_por_error(self):
+        # 1. Registrar una marca manual
+        self.client.post(self.url, self.datos)
+        marca_manual = MarcacionBiometrica.objects.get(origen='SISTEMA_MANUAL')
+        self.assertEqual(MarcacionBiometrica.objects.count(), 4)
+
+        # 2. Eliminar la marca manual añadida por error
+        res = self.client.post(self.url, {
+            'accion': 'eliminar_marcacion_manual',
+            'marcacion_id': marca_manual.pk,
+        })
+        self.assertEqual(res.status_code, 302)
+        self.assertFalse(MarcacionBiometrica.objects.filter(pk=marca_manual.pk).exists())
+        self.assertEqual(MarcacionBiometrica.objects.count(), 3)
+        self.resumen.refresh_from_db()
+        self.assertEqual(self.resumen.estado_revision, 'PENDIENTE')

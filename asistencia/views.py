@@ -1,5 +1,6 @@
 import csv
 import json
+from calendar import monthrange
 from datetime import date
 from decimal import Decimal
 from urllib.parse import urlencode
@@ -21,7 +22,7 @@ from core.models import Usuario
 from asistencia.models import (
     ResumenAsistenciaDiaria, MarcacionBiometrica, TurnoHorario, CargaArchivoAsistencia,
     IncidenciaAsistencia, AjusteAsistencia, CorreccionEvento, CierreAsistencia,
-    IdentidadBiometrica,
+    IdentidadBiometrica, FilaImportacionBiometrica,
 )
 from asistencia.services.revision import (
     puede_gestionar, puede_aprobar, comprobar_abierto, detalle_jornada,
@@ -36,14 +37,16 @@ def queryset_visible(usuario):
 
 def filtros_asistencia(request):
     hoy = timezone.localdate()
+    primer_dia = hoy.replace(day=1)
+    ultimo_dia = hoy.replace(day=monthrange(hoy.year, hoy.month)[1])
     error = ""
     try:
-        inicio = date.fromisoformat(request.GET.get("desde") or hoy.replace(day=1).isoformat())
-        fin = date.fromisoformat(request.GET.get("hasta") or hoy.isoformat())
+        inicio = date.fromisoformat(request.GET.get("desde") or primer_dia.isoformat())
+        fin = date.fromisoformat(request.GET.get("hasta") or ultimo_dia.isoformat())
         if fin < inicio:
             raise ValueError
     except ValueError:
-        inicio, fin = hoy.replace(day=1), hoy
+        inicio, fin = primer_dia, ultimo_dia
         error = "El intervalo de fechas no es válido. Se muestra el mes actual."
     return {
         "desde": inicio.isoformat(), "hasta": fin.isoformat(), "sede": request.GET.get("sede", ""),
@@ -110,8 +113,10 @@ def contexto_asistencia(request):
     for fila in filas_visibles.values():
         fila["validadas"] = 0
         fila["por_aprobar"] = fila["jornadas"] - fila["aprobadas"]
-    for d in detalles_en_lote([r for r in resumenes if r.persona.dni in filas_visibles]):
-        filas_visibles[d["resumen"].persona.dni]["validadas"] += int(dia_validado(d))
+    detalles_dashboard = detalles_en_lote(resumenes if puede_gestionar(request.user) else [r for r in resumenes if r.persona.dni in filas_visibles])
+    for d in detalles_dashboard:
+        if d["resumen"].persona.dni in filas_visibles:
+            filas_visibles[d["resumen"].persona.dni]["validadas"] += int(dia_validado(d))
     for fila in filas_visibles.values():
         fila["sin_validar"] = fila["jornadas"] - fila["validadas"]
     visibles = Usuario.objects.all() if puede_gestionar(request.user) else Usuario.objects.filter(pk=request.user.pk)
@@ -122,10 +127,12 @@ def contexto_asistencia(request):
     if request.GET.get("detalle", "").isdigit():
         r = get_object_or_404(queryset_visible(request.user), pk=int(request.GET["detalle"]))
         detalle = detalle_jornada(r)
-        if detalle["solo_situacion"]:
+        if not dni_ventana:
             dni_ventana = r.persona.dni
+        if detalle["solo_situacion"]:
             detalle = None
     revision_trabajador = None
+    seleccionadas = []
     if dni_ventana:
         from asistencia.services.revision_trabajador import filtrar_persona, contexto_revision
         seleccionadas = list(filtrar_persona(queryset_visible(request.user), dni_ventana).filter(fecha__range=(filtros["desde"], filtros["hasta"])).order_by("fecha", "pk"))
@@ -136,6 +143,29 @@ def contexto_asistencia(request):
         ultimo = request.session.get("resultado_aprobacion_masiva", {})
         if ultimo.get("dni") == dni_ventana and ultimo.get("desde") == filtros["desde"] and ultimo.get("hasta") == filtros["hasta"]:
             revision_trabajador["resultado_aprobacion"] = ultimo
+        dnis_trabajadores = [fila["usuario"].dni for fila in grupos]
+        if dni_ventana in dnis_trabajadores:
+            idx_w = dnis_trabajadores.index(dni_ventana)
+            trabajador_ant = grupos[idx_w - 1]["usuario"] if idx_w > 0 else None
+            trabajador_sig = grupos[idx_w + 1]["usuario"] if idx_w < len(dnis_trabajadores) - 1 else None
+            revision_trabajador["anterior_dni"] = trabajador_ant.dni if trabajador_ant else None
+            revision_trabajador["anterior_nombre"] = trabajador_ant.nombre_completo if trabajador_ant else None
+            revision_trabajador["siguiente_dni"] = trabajador_sig.dni if trabajador_sig else None
+            revision_trabajador["siguiente_nombre"] = trabajador_sig.nombre_completo if trabajador_sig else None
+            revision_trabajador["posicion_indice"] = idx_w + 1
+            revision_trabajador["total_trabajadores"] = len(dnis_trabajadores)
+    if detalle and seleccionadas:
+        pks_dias = [s.pk for s in seleccionadas]
+        if r.pk in pks_dias:
+            idx_d = pks_dias.index(r.pk)
+            dia_ant = seleccionadas[idx_d - 1] if idx_d > 0 else None
+            dia_sig = seleccionadas[idx_d + 1] if idx_d < len(pks_dias) - 1 else None
+            detalle["anterior_pk"] = dia_ant.pk if dia_ant else None
+            detalle["anterior_fecha"] = dia_ant.fecha if dia_ant else None
+            detalle["siguiente_pk"] = dia_sig.pk if dia_sig else None
+            detalle["siguiente_fecha"] = dia_sig.fecha if dia_sig else None
+            detalle["posicion_indice"] = idx_d + 1
+            detalle["total_dias"] = len(pks_dias)
     inicio, fin = filtros["desde"], filtros["hasta"]
     marcas = MarcacionBiometrica.objects.filter(fecha_hora__date__range=(inicio, fin))
     if not puede_gestionar(request.user):
@@ -150,7 +180,16 @@ def contexto_asistencia(request):
     identidad_consultada = None
     marcas_codigo = []
     filtros_codigos = {campo: request.GET.get(campo, "").strip()[:150] for campo in ("sede_codigo", "filtro_codigo", "nombre_codigo")}
+    from asistencia.services.grupos_importacion import grupo_importacion
+    grupo = grupo_importacion(request.GET) if puede_gestionar(request.user) else None
+    if grupo:
+        filtros_codigos.update(grupo_mes=grupo['mes'], grupo_carga=grupo['carga_id'])
     identidades = IdentidadBiometrica.objects.select_related("usuario", "trabajador").all() if puede_gestionar(request.user) else IdentidadBiometrica.objects.none()
+    if grupo and grupo['activo']:
+        identidades = identidades.filter(
+            Q(pk__in=grupo['marcas'].values('identidad_biometrica_id')) |
+            Q(pk__in=FilaImportacionBiometrica.objects.filter(marcacion__in=grupo['marcas']).values('identidad_id'))
+        )
     sedes_codigos = list(identidades.order_by("sede").values_list("sede", flat=True).distinct())
     if filtros_codigos["sede_codigo"]:
         identidades = identidades.filter(sede=filtros_codigos["sede_codigo"])
@@ -159,11 +198,21 @@ def contexto_asistencia(request):
     for termino in filtros_codigos["nombre_codigo"].split():
         identidades = identidades.filter(Q(nombre__icontains=termino) | Q(trabajador__nombre_completo__icontains=termino))
     identificados = identidades.exclude(trabajador__isnull=True)
-    periodo_envio = MarcacionBiometrica.objects.filter(Q(identidad_biometrica__in=identificados) | Q(filas_origen__identidad__in=identificados)).aggregate(desde=Min("fecha_hora"), hasta=Max("fecha_hora"))
+    marcas_envio = MarcacionBiometrica.objects.filter(Q(identidad_biometrica__in=identificados) | Q(filas_origen__identidad__in=identificados))
+    if grupo and grupo['activo']:
+        marcas_envio = marcas_envio.filter(pk__in=grupo['marcas'])
+    periodo_envio = marcas_envio.aggregate(desde=Min("fecha_hora"), hasta=Max("fecha_hora"))
     if puede_gestionar(request.user) and request.GET.get("codigo_biometrico", "").isdigit():
-        identidad_consultada = get_object_or_404(IdentidadBiometrica, pk=int(request.GET["codigo_biometrico"]))
-        marcas_codigo = MarcacionBiometrica.objects.filter(Q(identidad_biometrica=identidad_consultada) | Q(filas_origen__identidad=identidad_consultada)).distinct().select_related("carga_origen").prefetch_related("filas_origen").order_by("fecha_hora")[:100]
+        identidad_consultada = get_object_or_404(identidades, pk=int(request.GET["codigo_biometrico"]))
+        marcas_consultadas = MarcacionBiometrica.objects.filter(Q(identidad_biometrica=identidad_consultada) | Q(filas_origen__identidad=identidad_consultada))
+        if grupo and grupo['activo']:
+            marcas_consultadas = marcas_consultadas.filter(pk__in=grupo['marcas'])
+        marcas_codigo = marcas_consultadas.distinct().select_related("carga_origen").prefetch_related("filas_origen").order_by("fecha_hora")[:100]
+    cierres_periodo = list(CierreAsistencia.objects.filter(fecha_inicio__lte=fin, fecha_fin__gte=inicio)) if puede_gestionar(request.user) else []
+    from asistencia.services.dashboard_contable import resumen_dashboard
+    dashboard_contable = resumen_dashboard(detalles_dashboard, filtros, cierres_periodo) if puede_gestionar(request.user) else None
     return {
+        "dashboard_contable": dashboard_contable,
         "filtros": filtros, "pagina_asistencia": pagina, "consulta_asistencia": urlencode(query),
         "detalle_jornada": detalle, "consolidado": grupos, "conteos_revision": conteos,
         "pagina_trabajadores": pagina_trabajadores, "total_trabajadores_asistencia": len(grupos),
@@ -178,9 +227,10 @@ def contexto_asistencia(request):
         "sin_identidad": sin_identidad_visible, "total_sin_identidad": sin_identidad.count(),
         "usuarios_asistencia": visibles.filter(esta_activo=True, is_active=True),
         "cargas_con_error": CargaArchivoAsistencia.objects.filter(estado="ERROR").order_by("-fecha_subida")[:10] if puede_gestionar(request.user) else [],
-        "cierres_asistencia": CierreAsistencia.objects.filter(fecha_inicio__lte=fin, fecha_fin__gte=inicio) if puede_gestionar(request.user) else [],
+        "cierres_asistencia": cierres_periodo,
         "jornadas_fecha_futura": queryset_visible(request.user).filter(fecha__gt=timezone.localdate()).count(),
         "identidades_biometricas": identidades[:200],
+        "grupo_importacion": grupo,
         "filtros_codigos": filtros_codigos, "sedes_codigos": sedes_codigos,
         "total_codigos_filtrados": identidades.count(),
         "consulta_codigos": urlencode({"vista": "excel-zk", **{k: v for k, v in filtros_codigos.items() if v}}),
@@ -214,13 +264,24 @@ def accion_jornada(request, resumen_id):
             comprobar_abierto(r.fecha)
             accion = request.POST.get("accion")
             motivo = request.POST.get("motivo", "").strip()
-            if accion in {"APROBADO", "OBSERVADO"}:
+            if accion == 'aprobar_dia_situacion':
+                from asistencia.services.aprobacion_situacion import aprobar_situacion_del_dia
+                aprobar_situacion_del_dia(r, request.user, request.POST.get('tipo',''), motivo)
+            elif accion in {"APROBADO", "OBSERVADO"}:
                 revisar(r, request.user, accion, motivo)
+            elif accion == "reabrir":
+                dejar_pendiente(r, request.user, "Jornada reabierta para revisión y edición de datos.")
             elif accion == "turno":
                 turno = get_object_or_404(TurnoHorario, pk=request.POST.get("turno"), activo=True)
-                r.turno_aplicado = turno
-                r.save(update_fields=["turno_aplicado"])
-                dejar_pendiente(r, request.user, f"Turno de la jornada: {turno.nombre}")
+                if r.trabajador_id:
+                    from asistencia.services.horarios import programar_horarios
+                    programar_horarios(r.trabajador, r.fecha, r.fecha, [r.fecha.weekday()], turno, motivo or 'Horario confirmado desde el detalle de la jornada.', request.user)
+                else:
+                    from asistencia.services.horarios import actualizar_tardanza
+                    r.turno_aplicado = turno
+                    r.save(update_fields=["turno_aplicado"])
+                    actualizar_tardanza(r)
+                    dejar_pendiente(r, request.user, f"Turno de la jornada: {turno.nombre}")
             elif accion == "incidencia":
                 if not motivo:
                     raise ValidationError("Indique el motivo de la incidencia.")
@@ -232,6 +293,27 @@ def accion_jornada(request, resumen_id):
                 incidencia.full_clean()
                 incidencia.save()
                 dejar_pendiente(r, request.user, "Incidencia registrada: " + incidencia.get_tipo_display())
+            elif accion == "justificar_dia":
+                detalle = detalle_jornada(r, incluir_formulario=False)
+                situacion = detalle["situacion_dia"]
+                if not situacion or situacion.tipo != "OTRO" or r.verificado_contabilidad:
+                    raise ValidationError("Solo puede completar un día no trabajado pendiente de justificar.")
+                tipos = {"DESCANSO_SEMANAL", "FERIADO_NO_LABORADO", "VACACIONES", "PERMISO", "DESCANSO_MEDICO", "CAMBIO_DESCANSO"}
+                tipo = request.POST.get("tipo", "")
+                if tipo not in tipos:
+                    raise ValidationError("Seleccione la situación real del día.")
+                if tipo == "PERMISO" and not motivo:
+                    raise ValidationError("Indique la justificación del permiso.")
+                if tipo != "PERMISO":
+                    motivo = dict(IncidenciaAsistencia.TIPOS)[tipo]
+                anterior = f"{situacion.get_tipo_display()}: {situacion.motivo}. Aprobación anterior: {situacion.aprobado_el or 'pendiente'}"
+                situacion.tipo, situacion.motivo = tipo, motivo
+                situacion.aprobado_por = situacion.aprobado_el = None
+                situacion.full_clean()
+                situacion.save(update_fields=["tipo", "motivo", "aprobado_por", "aprobado_el"])
+                r.estado = "POR_REVISAR"
+                r.save(update_fields=["estado"])
+                dejar_pendiente(r, request.user, f"Situación del día corregida. Antes: {anterior}. Ahora: {situacion.get_tipo_display()}: {motivo}. Requiere nueva aprobación.")
             elif accion == "ajuste":
                 if not motivo:
                     raise ValidationError("Indique el motivo del ajuste.")
@@ -250,6 +332,8 @@ def accion_jornada(request, resumen_id):
                     return HttpResponseForbidden("La aprobación corresponde a Contabilidad o Gerencia.")
                 model = IncidenciaAsistencia if accion == "aprobar_incidencia" else AjusteAsistencia
                 obj = get_object_or_404(model, pk=request.POST.get("registro_id"), resumen=r, aprobado_el__isnull=True)
+                if accion == "aprobar_incidencia" and obj.tipo == "OTRO" and obj.minutos is None and obj.motivo == "Día no trabajado pendiente de justificar":
+                    raise ValidationError("Complete la justificación del día antes de aprobar la situación.")
                 if accion == "aprobar_ajuste":
                     nuevo_total = valores_ajustados(r)[obj.concepto] + Decimal(obj.minutos) / Decimal(60)
                     if nuevo_total < 0:
@@ -272,6 +356,35 @@ def accion_jornada(request, resumen_id):
                 if cambios:
                     validar_periodo([r], cambios, originales, None, "Clasificación junto al registro manual.", request.user)
                 agregar_marcacion_manual(r, request.POST, request.user)
+            elif accion == "eliminar_marcacion_manual":
+                marcacion_id = request.POST.get("marcacion_id")
+                if not marcacion_id:
+                    raise ValidationError("No se especificó la marcación a eliminar.")
+                marca = get_object_or_404(MarcacionBiometrica, pk=marcacion_id)
+                if marca.pk not in [m.pk for m in detalle_jornada(r)["marcas"]]:
+                    raise ValidationError("La marcación no pertenece al intervalo de esta jornada.")
+                if marca.origen != "SISTEMA_MANUAL":
+                    raise ValidationError("Solo se pueden eliminar directamente marcaciones registradas de forma manual.")
+                motivo = motivo or "Marcación manual eliminada por error."
+                registrar_historial(
+                    r, request.user, "Marcación manual eliminada",
+                    f"{timezone.localtime(marca.fecha_hora).strftime('%d/%m/%Y %H:%M:%S')} — {marca.get_tipo_evento_display()}. {motivo}",
+                )
+                marca.delete()
+                marcas_restantes = [m for m in detalle_jornada(r)["marcas"] if m.es_valida]
+                if marcas_restantes:
+                    r.primera_entrada = timezone.localtime(min(m.fecha_hora for m in marcas_restantes)).time()
+                    r.ultima_salida = timezone.localtime(max(m.fecha_hora for m in marcas_restantes)).time() if len(marcas_restantes) > 1 else None
+                else:
+                    r.primera_entrada = None
+                    r.ultima_salida = None
+                r.save(update_fields=["primera_entrada", "ultima_salida"])
+                dejar_pendiente(r, request.user, "Se eliminó una marcación manual; requiere revisión de la jornada.")
+                from asistencia.services.revision_trabajador import validar_periodo
+                validar_periodo([r], {}, {}, None, "Recalculado tras eliminar marcación manual.", request.user)
+            elif accion in {'excluir_duplicada', 'restaurar_duplicada'}:
+                from asistencia.services.duplicadas import revisar_duplicada
+                revisar_duplicada(r, request.user, int(request.POST.get('marcacion_id', '')), restaurar=accion == 'restaurar_duplicada')
             elif accion == "corregir_eventos":
                 from asistencia.services.revision_trabajador import validar_periodo
                 cambios = {int(k.removeprefix("evento_")): v for k, v in request.POST.items() if k.startswith("evento_")}
@@ -393,7 +506,8 @@ def crear_jornada(request):
             fecha = date.fromisoformat(request.POST.get("fecha", ""))
             comprobar_abierto(fecha)
             usuario = get_object_or_404(Usuario, pk=request.POST.get("usuario"), esta_activo=True)
-            resumen, nueva = ResumenAsistenciaDiaria.objects.get_or_create(usuario=usuario, fecha=fecha, defaults={"estado": "PERMISO", "turno_aplicado": usuario.turno})
+            from asistencia.services.horarios import turno_programado
+            resumen, nueva = ResumenAsistenciaDiaria.objects.get_or_create(usuario=usuario, fecha=fecha, defaults={"estado": "PERMISO", "turno_aplicado": turno_programado(usuario, fecha)})
             if nueva:
                 registrar_historial(resumen, request.user, "Jornada creada", "Sin marcas ni horas; pendiente de documentar y revisar.")
                 messages.success(request, "Jornada creada. Agregue la incidencia o revise las marcaciones.")

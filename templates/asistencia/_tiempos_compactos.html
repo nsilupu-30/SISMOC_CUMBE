@@ -1,0 +1,73 @@
+<section class="day-audit-panel" aria-labelledby="titulo-tiempos">
+    <header class="day-audit-heading">
+        <h4 id="titulo-tiempos">Resumen de tiempos</h4>
+        <span>{{ d.resumen.fecha|date:'d/m/Y' }}{% if d.cruza_medianoche %} → {{ d.fin_consulta|date:'d/m/Y' }}{% endif %}</span>
+    </header>
+
+    <!-- Turno de la jornada compacto -->
+    <div class="day-shift-card">
+        <div class="day-shift-info">
+            <span class="day-shift-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-clock"></use></svg></span>
+            <div>
+                <span class="day-shift-label">Horario programado</span>
+                <strong class="day-shift-name">{% if d.turno %}{{ d.turno.hora_entrada|time:'H:i' }}–{{ d.turno.hora_salida|time:'H:i' }}{% if d.turno.hora_salida < d.turno.hora_entrada %} · día siguiente{% endif %}{% else %}Por confirmar{% endif %}</strong>
+                {% if d.turno %}<span class="day-shift-description">{{ d.turno.nombre }}</span>{% endif %}
+            </div>
+        </div>
+        {% if puede_gestionar and not d.cerrada %}
+        <details class="day-shift-editor"><summary>Cambiar horario</summary>
+        <form method="post" action="{% url 'accion_jornada' d.resumen.pk %}" class="day-shift-form">
+            {% csrf_token %}{% include 'asistencia/_filtros_post.html' %}
+            <input type="hidden" name="accion" value="turno">
+            <select name="turno" required class="day-shift-select" aria-label="Cambiar horario">
+                <option value="">Seleccionar horario</option>{% for turno in turnos %}
+                <option value="{{ turno.pk }}" {% if turno.pk == d.turno.pk %}selected{% endif %}>{{ turno.nombre }} · {{ turno.hora_entrada|time:'H:i' }}–{{ turno.hora_salida|time:'H:i' }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn-dark-outline btn-shift-submit" type="submit">Guardar horario</button>
+        </form>
+        </details>
+        {% endif %}
+    </div>
+
+    <!-- 4 Métricas principales en cuadrícula compacta -->
+    <dl class="day-time-summary">
+        <div>
+            <dt>Trabajo efectivo</dt>
+            <dd>{{ d.trabajo_reconstruido|default:'Por revisar' }}</dd>
+        </div>
+        <div>
+            <dt>Refrigerio</dt>
+            <dd>{{ d.refrigerio|default:'Por revisar' }}</dd>
+        </div>
+        <div class="{% if d.tardanza_confirmada and d.resumen.minutos_tardanza %}day-time-warning{% endif %}">
+            <dt>Tardanza</dt>
+            <dd>{% if d.tardanza_confirmada %}{{ d.resumen.minutos_tardanza }} <span>min</span>{% else %}<span>{% if not d.turno %}Horario por confirmar{% else %}Pendiente de cálculo{% endif %}</span>{% endif %}</dd>
+        </div>
+        <div>
+            <dt>Tiempo pendiente</dt>
+            <dd>{% if d.deficit_minutos != None %}{{ d.deficit_minutos }} <span>min</span>{% else %}Por revisar{% endif %}</dd>
+        </div>
+    </dl>
+
+    <!-- Tabla de conceptos en horas decimales -->
+    <div class="table-responsive day-time-concepts">
+        <table class="custom-dark-table">
+            <caption class="visually-hidden">Horas guardadas y horas con ajustes aprobados, expresadas en decimales.</caption>
+            <thead>
+                <tr>
+                    <th>Concepto</th>
+                    <th>Guardado (h)</th>
+                    <th>Con ajustes (h)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>Horas efectivas</td><td>{{ d.resumen.horas_trabajadas|floatformat:2 }}</td><td>{{ d.valores.horas_trabajadas|floatformat:2 }}</td></tr>
+                <tr><td>Extras 25 %</td><td>{{ d.resumen.horas_extras_25|floatformat:2 }}</td><td>{{ d.valores.horas_extras_25|floatformat:2 }}</td></tr>
+                <tr><td>Extras 35 %</td><td>{{ d.resumen.horas_extras_35|floatformat:2 }}</td><td>{{ d.valores.horas_extras_35|floatformat:2 }}</td></tr>
+                <tr><td>Nocturnas</td><td>{{ d.resumen.horas_nocturnas|floatformat:2 }}</td><td>{{ d.valores.horas_nocturnas|floatformat:2 }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+</section>

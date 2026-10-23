@@ -1,16 +1,26 @@
 <tr class="dia-no-laborado">
     <td>{{ d.resumen.fecha|date:'d/m/Y' }}</td>
     <td><strong>{% if d.situacion_dia.tipo == 'OTRO' %}No trabajó · pendiente de justificar{% else %}{{ d.situacion_dia.get_tipo_display }}{% endif %}</strong>
-        {% if d.resumen.verificado_contabilidad %}<small><span class="status-pill pill-emerald">Día aprobado</span></small>
+        {% if d.situacion_dia.tipo == 'OTRO' %}<small><span class="status-pill pill-orange">Justificación pendiente</span></small>
+        {% elif d.resumen.verificado_contabilidad %}<small><span class="status-pill pill-emerald">Día aprobado</span></small>
         {% elif d.situacion_dia.aprobado_el %}<small><span class="status-pill pill-emerald">Situación aprobada</span></small>
         {% else %}<small><span class="status-pill pill-orange">Pendiente de aprobación</span></small>{% endif %}
     </td>
     <td>No laboró</td><td>No laboró</td><td>No laboró</td><td>No laboró</td>
     <td>{% if d.cerrada %}Periodo cerrado{% else %}
-        {% if puede_aprobar and not d.situacion_dia.aprobado_el %}
-        <form method="post" action="{% url 'accion_jornada' d.resumen.pk %}">{% csrf_token %}{% include 'asistencia/_filtros_post.html' %}<input type="hidden" name="solo_situacion" value="si"><input type="hidden" name="accion" value="aprobar_incidencia"><input type="hidden" name="registro_id" value="{{ d.situacion_dia.pk }}"><button class="btn-dark-outline" type="submit">Aprobar situación</button></form>
-        {% elif puede_aprobar and not d.resumen.verificado_contabilidad and not d.bloqueos %}
-        <form method="post" action="{% url 'accion_jornada' d.resumen.pk %}">{% csrf_token %}{% include 'asistencia/_filtros_post.html' %}<input type="hidden" name="solo_situacion" value="si"><input type="hidden" name="accion" value="APROBADO"><button class="btn-dark-outline" type="submit">Aprobar día</button></form>
+        {% if puede_aprobar and not d.resumen.verificado_contabilidad %}
+        {% include 'asistencia/_seleccionar_situacion_aprobacion.html' %}
+        {% elif d.situacion_dia.tipo == 'OTRO' and puede_gestionar and not d.resumen.verificado_contabilidad %}
+        <details><summary>Justificar día</summary>
+            <form method="post" action="{% url 'accion_jornada' d.resumen.pk %}" class="formulario-vertical" data-situacion-form>
+                {% csrf_token %}{% include 'asistencia/_filtros_post.html' %}
+                <input type="hidden" name="solo_situacion" value="si"><input type="hidden" name="accion" value="justificar_dia">
+                <label>Situación del día<select name="tipo" required><option value="">Seleccione</option><option value="DESCANSO_SEMANAL">Descanso semanal</option><option value="FERIADO_NO_LABORADO">Feriado no laborado</option><option value="PERMISO">Permiso</option><option value="VACACIONES">Vacaciones</option><option value="DESCANSO_MEDICO">Descanso médico</option><option value="CAMBIO_DESCANSO">Cambio de descanso</option></select></label>
+                <label data-justificacion-permiso hidden>Justificación del permiso<textarea name="motivo" rows="2" disabled></textarea></label>
+                <button class="btn-dark-outline" type="submit">Guardar situación</button>
+                <small>La situación quedará pendiente de aprobación.</small>
+            </form>
+        </details>
         {% elif not d.resumen.verificado_contabilidad %}<small>{% if d.situacion_dia.tipo == 'OTRO' %}Pendiente de justificar{% else %}Pendiente de revisión{% endif %}</small>{% endif %}
     {% endif %}</td>
 </tr>

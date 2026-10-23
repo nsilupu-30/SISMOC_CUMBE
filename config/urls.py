@@ -13,8 +13,10 @@ from core.views import dashboard_view, login_view, logout_view
 from asistencia import views as asistencia_views
 from asistencia import views_trabajadores
 from asistencia import views_revision_trabajador
+from asistencia import views_horarios
 
 urlpatterns = [
+    path("asistencia/horarios/", views_horarios.horarios, name="programar_horarios"),
     path("asistencia/aprobar-periodo-trabajador/", views_revision_trabajador.aprobar_periodo_trabajador, name="aprobar_periodo_trabajador"),
     path("asistencia/registrar-dia-sin-marcas/", views_revision_trabajador.registrar_dia_sin_marcas, name="registrar_dia_sin_marcas"),
     path("asistencia/validar-marcaciones-trabajador/", views_revision_trabajador.validar_marcaciones_trabajador, name="validar_marcaciones_trabajador"),

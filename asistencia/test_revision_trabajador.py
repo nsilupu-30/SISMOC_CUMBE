@@ -140,7 +140,7 @@ class RevisionPorTrabajadorTests(TestCase):
         respuesta = self.client.get(reverse('dashboard'), {**self.consulta, 'hasta': str(dia), 'persona_dni': self.ficha.dni, 'detalle': resumen.pk})
         self.assertIsNone(respuesta.context['detalle_jornada'])
         self.assertNotContains(respuesta, 'id="detalle-jornada-dialog"')
-        self.assertContains(respuesta, 'Aprobar situación')
+        self.assertContains(respuesta, 'Seleccionar situación')
         self.assertContains(respuesta, 'class="dia-no-laborado"')
 
     def test_aprobar_descanso_y_dia_desde_la_fila(self):
@@ -151,7 +151,7 @@ class RevisionPorTrabajadorTests(TestCase):
         datos = {'persona_dni': self.ficha.dni, 'desde': str(self.desde), 'hasta': str(dia), 'solo_situacion': 'si'}
         respuesta = self.client.post(reverse('accion_jornada', args=[resumen.pk]), {**datos, 'accion': 'aprobar_incidencia', 'registro_id': incidencia.pk})
         self.assertNotIn('detalle=', respuesta.url)
-        self.client.post(reverse('accion_jornada', args=[resumen.pk]), {**datos, 'accion': 'APROBADO'})
+        self.client.post(reverse('accion_jornada', args=[resumen.pk]), {**datos, 'accion': 'aprobar_dia_situacion', 'tipo': 'DESCANSO_SEMANAL'})
         resumen.refresh_from_db()
         self.assertTrue(resumen.verificado_contabilidad)
         self.assertEqual(resumen.estado, 'DIA_LIBRE')
@@ -161,3 +161,111 @@ class RevisionPorTrabajadorTests(TestCase):
         resumen = ResumenAsistenciaDiaria.objects.order_by('fecha').first()
         IncidenciaAsistencia.objects.create(resumen=resumen, tipo='DESCANSO_SEMANAL', motivo='Revisar situación', creado_por=self.gestor)
         self.assertFalse(detalle_jornada(resumen)['solo_situacion'])
+
+    def crear_dia_pendiente_justificar(self, aprobado=False):
+        dia = self.hasta + timedelta(days=1)
+        r = ResumenAsistenciaDiaria.objects.create(trabajador=self.ficha, fecha=dia, estado='POR_REVISAR')
+        incidencia = IncidenciaAsistencia.objects.create(resumen=r, tipo='OTRO', motivo='Día no trabajado pendiente de justificar', creado_por=self.gestor, aprobado_el=timezone.now() if aprobado else None, aprobado_por=self.gestor if aprobado else None)
+        datos = {**self.consulta, 'hasta': str(dia), 'persona_dni': self.ficha.dni, 'solo_situacion': 'si'}
+        return r, incidencia, datos
+
+    def test_justificar_dia_antes_aprobado_requiere_nueva_aprobacion(self):
+        r, incidencia, datos = self.crear_dia_pendiente_justificar(aprobado=True)
+        respuesta = self.client.get(reverse('dashboard'), datos)
+        self.assertContains(respuesta, 'Justificación pendiente')
+        self.assertContains(respuesta, 'Seleccionar situación')
+        self.assertNotContains(respuesta, 'Situación aprobada')
+        self.client.post(reverse('accion_jornada', args=[r.pk]), {**datos, 'accion': 'justificar_dia', 'tipo': 'DESCANSO_SEMANAL', 'motivo': 'Descanso según programación'})
+        incidencia.refresh_from_db()
+        self.assertEqual(incidencia.tipo, 'DESCANSO_SEMANAL')
+        self.assertIsNone(incidencia.aprobado_el)
+        self.assertTrue(r.historial_revision.filter(detalle__contains='Aprobación anterior:').exists())
+        self.client.post(reverse('accion_jornada', args=[r.pk]), {**datos, 'accion': 'APROBADO'})
+        r.refresh_from_db()
+        self.assertFalse(r.verificado_contabilidad)
+        self.client.post(reverse('accion_jornada', args=[r.pk]), {**datos, 'accion': 'aprobar_incidencia', 'registro_id': incidencia.pk})
+        self.client.post(reverse('accion_jornada', args=[r.pk]), {**datos, 'accion': 'aprobar_dia_situacion', 'tipo': 'DESCANSO_SEMANAL'})
+        r.refresh_from_db()
+        self.assertTrue(r.verificado_contabilidad)
+        self.assertEqual(r.estado, 'DIA_LIBRE')
+        self.assertEqual(MarcacionBiometrica.objects.count(), 8)
+
+    def test_no_se_aprueba_placeholder_sin_justificacion(self):
+        r, incidencia, datos = self.crear_dia_pendiente_justificar()
+        self.client.post(reverse('accion_jornada', args=[r.pk]), {**datos, 'accion': 'aprobar_incidencia', 'registro_id': incidencia.pk})
+        incidencia.refresh_from_db()
+        self.assertIsNone(incidencia.aprobado_el)
+        self.client.post(reverse('accion_jornada', args=[r.pk]), {**datos, 'accion': 'justificar_dia', 'tipo': 'PERMISO', 'motivo': ''})
+        incidencia.refresh_from_db()
+        self.assertEqual(incidencia.tipo, 'OTRO')
+
+    def test_justificacion_no_modifica_periodo_cerrado(self):
+        r, incidencia, datos = self.crear_dia_pendiente_justificar(aprobado=True)
+        CierreAsistencia.objects.create(fecha_inicio=r.fecha, fecha_fin=r.fecha, total_jornadas=1)
+        self.client.post(reverse('accion_jornada', args=[r.pk]), {**datos, 'accion': 'justificar_dia', 'tipo': 'PERMISO', 'motivo': 'Autorización'})
+        incidencia.refresh_from_db()
+        self.assertEqual(incidencia.tipo, 'OTRO')
+        self.assertIsNotNone(incidencia.aprobado_el)
+
+    def test_situaciones_excepto_permiso_no_requieren_motivo(self):
+        r, incidencia, datos = self.crear_dia_pendiente_justificar()
+        for tipo in ['DESCANSO_SEMANAL', 'FERIADO_NO_LABORADO', 'VACACIONES', 'DESCANSO_MEDICO', 'CAMBIO_DESCANSO']:
+            incidencia.tipo = 'OTRO'
+            incidencia.motivo = 'Día no trabajado pendiente de justificar'
+            incidencia.save()
+            self.client.post(reverse('accion_jornada', args=[r.pk]), {**datos, 'accion': 'justificar_dia', 'tipo': tipo})
+            incidencia.refresh_from_db()
+            self.assertEqual(incidencia.tipo, tipo)
+            self.assertEqual(incidencia.motivo, dict(IncidenciaAsistencia.TIPOS)[tipo])
+            self.assertIsNone(incidencia.aprobado_el)
+
+    def test_permiso_conserva_justificacion_escrita(self):
+        r, incidencia, datos = self.crear_dia_pendiente_justificar()
+        self.client.post(reverse('accion_jornada', args=[r.pk]), {**datos, 'accion': 'justificar_dia', 'tipo': 'PERMISO', 'motivo': 'Trámite personal autorizado'})
+        incidencia.refresh_from_db()
+        self.assertEqual(incidencia.tipo, 'PERMISO')
+        self.assertEqual(incidencia.motivo, 'Trámite personal autorizado')
+        self.assertIsNone(incidencia.aprobado_el)
+
+    def test_navegacion_siguiente_anterior_trabajadores(self):
+        ficha2 = Trabajador.objects.create(nombre_completo='Ana Balarezo', dni='12345678', area='Operaciones', sede='CAJAMARCA')
+        id2 = IdentidadBiometrica.objects.create(sede='CAJAMARCA', equipo='1', codigo='14', trabajador=ficha2, nombre=ficha2.nombre_completo)
+        MarcacionBiometrica.objects.create(identidad_biometrica=id2, fecha_hora=timezone.make_aware(datetime.combine(self.desde, time(8))), tipo_evento='ENTRADA')
+        pasar_a_asistencia([ficha2.pk], self.desde, self.hasta, self.gestor)
+
+        # Ana Balarezo (12345678) es la primera en orden alfabético
+        resp_ana = self.client.get(reverse('dashboard'), {**self.consulta, 'persona_dni': ficha2.dni})
+        self.assertContains(resp_ana, 'id="revision-trabajador-dialog"')
+        rev_ana = resp_ana.context['revision_trabajador']
+        self.assertIsNone(rev_ana['anterior_dni'])
+        self.assertEqual(rev_ana['siguiente_dni'], self.ficha.dni)
+        self.assertEqual(rev_ana['posicion_indice'], 1)
+        self.assertEqual(rev_ana['total_trabajadores'], 2)
+        self.assertContains(resp_ana, f'persona_dni={self.ficha.dni}')
+
+        # Jorge Aguilar (87654321) es el segundo
+        resp_jorge = self.client.get(reverse('dashboard'), {**self.consulta, 'persona_dni': self.ficha.dni})
+        rev_jorge = resp_jorge.context['revision_trabajador']
+        self.assertEqual(rev_jorge['anterior_dni'], ficha2.dni)
+        self.assertIsNone(rev_jorge['siguiente_dni'])
+        self.assertEqual(rev_jorge['posicion_indice'], 2)
+        self.assertContains(resp_jorge, f'persona_dni={ficha2.dni}')
+
+    def test_navegacion_siguiente_anterior_dias(self):
+        jornadas = list(ResumenAsistenciaDiaria.objects.filter(trabajador=self.ficha).order_by('fecha', 'pk'))
+        self.assertEqual(len(jornadas), 2)
+        j1, j2 = jornadas[0], jornadas[1]
+
+        # Abrir primer día
+        resp_dia1 = self.client.get(reverse('dashboard'), {**self.consulta, 'persona_dni': self.ficha.dni, 'detalle': j1.pk})
+        det1 = resp_dia1.context['detalle_jornada']
+        self.assertIsNone(det1['anterior_pk'])
+        self.assertEqual(det1['siguiente_pk'], j2.pk)
+        self.assertContains(resp_dia1, f'detalle={j2.pk}')
+
+        # Abrir segundo día
+        resp_dia2 = self.client.get(reverse('dashboard'), {**self.consulta, 'persona_dni': self.ficha.dni, 'detalle': j2.pk})
+        det2 = resp_dia2.context['detalle_jornada']
+        self.assertEqual(det2['anterior_pk'], j1.pk)
+        self.assertIsNone(det2['siguiente_pk'])
+        self.assertContains(resp_dia2, f'detalle={j1.pk}')

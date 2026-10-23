@@ -10,3 +10,6 @@ __pycache__
 .vscode
 *.log
 sismoc_cumbe_db.sqlite3
+
+node_modules
+tmp

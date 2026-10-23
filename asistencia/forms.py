@@ -26,9 +26,9 @@ class MarcacionManualForm(forms.Form):
     fecha_manual = forms.DateField(label="Fecha", widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"))
     hora_manual = forms.TimeField(label="Hora confirmada", widget=forms.TimeInput(attrs={"type": "time", "step": "1"}, format="%H:%M:%S"))
     tipo_evento_manual = forms.ChoiceField(label="Tipo de marcación", choices=[(codigo, nombre) for codigo, nombre in MarcacionBiometrica.TipoEvento.choices if codigo != "SIN_CLASIFICAR"])
-    identidad_manual = forms.ModelChoiceField(label="Código importado / equipo", queryset=IdentidadBiometrica.objects.none(), required=False)
+    identidad_manual = forms.ModelChoiceField(label="Código importado / equipo", queryset=IdentidadBiometrica.objects.none(), required=False, widget=forms.HiddenInput())
     motivo_manual = forms.CharField(label="Motivo y referencia de la hora confirmada", max_length=1000, widget=forms.Textarea(attrs={"rows": 2}))
-    evidencia_manual_url = forms.URLField(label="Enlace de evidencia (opcional)", required=False, max_length=500)
+    evidencia_manual_url = forms.URLField(label="Enlace de evidencia (opcional)", required=False, max_length=500, widget=forms.HiddenInput())
 
     def __init__(self, *args, resumen, **kwargs):
         super().__init__(*args, **kwargs)
@@ -40,6 +40,25 @@ class MarcacionManualForm(forms.Form):
             consulta |= Q(usuario_id=resumen.usuario_id)
         identidades = IdentidadBiometrica.objects.filter(consulta)
         self.fields["identidad_manual"].queryset = identidades
-        self.fields["identidad_manual"].required = identidades.exists()
+        self._identidad_automatica = None
+        self.fields["identidad_manual"].required = False
         if identidades.count() == 1:
-            self.initial["identidad_manual"] = identidades.first().pk
+            self._identidad_automatica = identidades.first()
+        elif identidades.exists():
+            from asistencia.services.revision import marcas_persona, ventana_jornada
+            inicio, fin = ventana_jornada(resumen)
+            ids = MarcacionBiometrica.objects.filter(
+                marcas_persona(resumen), fecha_hora__gte=inicio, fecha_hora__lte=fin,
+                es_valida=True, identidad_biometrica__in=identidades,
+            ).values_list("identidad_biometrica_id", flat=True).distinct()
+            usadas = list(identidades.filter(pk__in=ids)[:2])
+            if len(usadas) == 1:
+                self._identidad_automatica = usadas[0]
+        if self._identidad_automatica:
+            self.initial["identidad_manual"] = self._identidad_automatica.pk
+
+    def clean_identidad_manual(self):
+        identidad = self.cleaned_data.get("identidad_manual") or self._identidad_automatica
+        if identidad is None and self.fields["identidad_manual"].queryset.exists():
+            raise forms.ValidationError("No se pudo determinar el código de esta jornada. Revise la asociación del trabajador en el importador.")
+        return identidad

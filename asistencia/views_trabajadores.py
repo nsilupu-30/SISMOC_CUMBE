@@ -130,14 +130,18 @@ def editar_trabajador(request, identidad_id):
 def enviar_a_asistencia(request):
     if not puede_gestionar(request.user):
         return JsonResponse({"detail": "No tiene permiso para enviar marcaciones."}, status=403)
-    filtros = {k: request.POST.get(k, "").strip()[:150] for k in ("sede_codigo", "filtro_codigo", "nombre_codigo")}
+    filtros = {k: request.POST.get(k, "").strip()[:150] for k in ("sede_codigo", "filtro_codigo", "nombre_codigo", "grupo_mes", "grupo_carga")}
     try:
         if request.POST.get("confirmar_identificacion") != "si":
             raise ValidationError("Confirme que revisó las fichas antes de enviarlas.")
         desde, hasta = date.fromisoformat(request.POST.get("desde_envio", "")), date.fromisoformat(request.POST.get("hasta_envio", ""))
         if hasta < desde:
             raise ValidationError("La fecha final no puede ser anterior a la inicial.")
+        from asistencia.services.grupos_importacion import validar_grupo_envio
+        grupo = validar_grupo_envio(filtros, desde, hasta)
         identidades = IdentidadBiometrica.objects.filter(trabajador__isnull=False)
+        if grupo['activo']:
+            identidades = identidades.filter(Q(marcaciones__in=grupo['marcas'])|Q(filaimportacionbiometrica__marcacion__in=grupo['marcas'])).distinct()
         if filtros["sede_codigo"]:
             identidades = identidades.filter(sede=filtros["sede_codigo"])
         if filtros["filtro_codigo"]:
@@ -145,8 +149,8 @@ def enviar_a_asistencia(request):
         for termino in filtros["nombre_codigo"].split():
             identidades = identidades.filter(Q(nombre__icontains=termino) | Q(trabajador__nombre_completo__icontains=termino))
         from asistencia.services.transferencia import pasar_a_asistencia
-        resultado = pasar_a_asistencia(identidades.values_list("trabajador_id", flat=True).distinct(), desde, hasta, request.user)
-        messages.success(request, f"Envío completado: {resultado['nuevas']} jornadas nuevas y {resultado['existentes']} ya existentes. Las nuevas quedan pendientes de revisar eventos, horario y horas.")
+        resultado = pasar_a_asistencia(identidades.values_list("trabajador_id", flat=True).distinct(), desde, hasta, request.user, marcas_ids=grupo['fuente'].values('pk') if grupo['activo'] else None)
+        messages.success(request, f"Envío completado: {resultado['nuevas']} jornadas nuevas y {resultado['existentes']} ya existentes. Los eventos disponibles se proponen automáticamente: revíselos y confírmelos antes de aprobar el día.")
         return redirect(reverse("dashboard") + "?" + urlencode({"vista": "asistencia", "desde": resultado["desde"].isoformat(), "hasta": resultado["hasta"].isoformat()}))
     except (ValidationError, ValueError) as exc:
         messages.error(request, " ".join(exc.messages) if isinstance(exc, ValidationError) else "Seleccione un periodo de envío válido.")

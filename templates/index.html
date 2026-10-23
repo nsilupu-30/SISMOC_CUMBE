@@ -6,10 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SISMOC-CUMBE | Sistema Integrado de Gestión Operativa y Asistencia</title>
 
-    <!-- Google Fonts: Inter & Outfit -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Tipografía de la interfaz -->
 
     <!-- Bootstrap 5 -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
@@ -605,20 +602,26 @@
     
 
     </style>
-    <link rel="stylesheet" href="{% static 'asistencia.css' %}?v=20261017-aprobacion-5">
+    <link rel="stylesheet" href="{% static 'asistencia.css' %}?v=20261023-zkpopup-1">
+    <link rel="stylesheet" href="{% static 'dashboard_contable.css' %}?v=20261023-2">
+    <link rel="stylesheet" href="{% static 'interfaz.css' %}?v=20261023-zkpopup-1">
+    <link rel="stylesheet" href="{% static 'app.css' %}?v=20261023-zkpopup-1">
+    {% include '_theme_head.html' %}
 </head>
 <body>
+    {% include "_icons.html" %}
+    <button type="button" class="sidebar-scrim" id="cerrar-navegacion" aria-label="Cerrar navegación" tabindex="-1"></button>
 
     <!-- ===================================================================
          SIDEBAR INSTITUCIONAL EL CUMBE (Estilo heredado de trabajos anteriores)
     =================================================================== -->
-    <nav class="sidebar">
+    <nav class="sidebar" id="navegacion-principal" aria-label="Navegación principal">
         <div class="brand">
-            <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRwTYiflwR087rJ8I_PTnxf22NcIscgYLRpcA&s" 
+            <img src="{% static 'img/el-cumbe-marca.png' %}"
                  class="brand-logo" alt="El Cumbe Logo">
             <div>
-                <div class="brand-title">EL CUMBE</div>
-                <div class="brand-sub">SISMOC v1.0 • 2026-II</div>
+                <div class="brand-title">Panel operativo</div>
+                <div class="brand-sub">SISMOC-CUMBE</div>
             </div>
         </div>
 
@@ -626,31 +629,39 @@
             <li class="menu-category">Operación & Asistencia</li>
             <li class="menu-item">
                 <button class="menu-link active" onclick="mostrarSeccion('dashboard')">
-                    <span class="menu-icon">⚡</span>
+                    <span class="menu-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-grid"></use></svg></span>
                     <span>Dashboard</span>
                 </button>
             </li>
             <li class="menu-item">
                 <button class="menu-link" onclick="mostrarSeccion('huellero')">
-                    <span class="menu-icon">⚡</span>
+                    <span class="menu-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-clock"></use></svg></span>
                     <span>Huellero en tiempo real</span>
                 </button>
             </li>
             <li class="menu-item">
                 <button class="menu-link" onclick="mostrarSeccion('asistencia')">
-                    <span class="menu-icon">📊</span>
+                    <span class="menu-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-calendar"></use></svg></span>
                     <span>Asistencia & HH.EE.</span>
                 </button>
             </li>
+            {% if puede_gestionar %}
+            <li class="menu-item">
+                <button class="menu-link" onclick="mostrarSeccion('contabilidad')">
+                    <span class="menu-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-bank"></use></svg></span>
+                    <span>Resumen contable</span>
+                </button>
+            </li>
+            {% endif %}
             <li class="menu-item">
                 <button class="menu-link" onclick="mostrarSeccion('conductores')">
-                    <span class="menu-icon">🚌</span>
+                    <span class="menu-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-bus"></use></svg></span>
                     <span>Vueltas Chofer & SUTRAN</span>
                 </button>
             </li>
             <li class="menu-item">
                 <button class="menu-link" onclick="mostrarSeccion('excel-zk')">
-                    <span class="menu-icon">📂</span>
+                    <span class="menu-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-file"></use></svg></span>
                     <span>Importador Excel ZKTeco</span>
                 </button>
             </li>
@@ -658,19 +669,19 @@
             <li class="menu-category">Administración & Roles</li>
             <li class="menu-item">
                 <button class="menu-link" onclick="mostrarSeccion('roles')">
-                    <span class="menu-icon">👥</span>
+                    <span class="menu-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-users"></use></svg></span>
                     <span>7 Roles RBAC (Matriz)</span>
                 </button>
             </li>
             <li class="menu-item">
                 <button class="menu-link" onclick="mostrarSeccion('flota')">
-                    <span class="menu-icon">🚍</span>
+                    <span class="menu-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-bus"></use></svg></span>
                     <span>Buses & Flota (1 y 2 Pisos)</span>
                 </button>
             </li>
             <li class="menu-item">
                 <button class="menu-link" onclick="mostrarSeccion('bcp')">
-                    <span class="menu-icon">🏦</span>
+                    <span class="menu-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-bank"></use></svg></span>
                     <span>Conciliación BCP (Sprint 2)</span>
                 </button>
             </li>
@@ -678,13 +689,13 @@
             <li class="menu-category">Enlaces Técnicos</li>
             <li class="menu-item">
                 <a class="menu-link" href="/api/docs" target="_blank">
-                    <span class="menu-icon">📑</span>
+                    <span class="menu-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-file"></use></svg></span>
                     <span>Swagger API Docs</span>
                 </a>
             </li>
             <li class="menu-item">
                 <a class="menu-link" href="/admin/" target="_blank">
-                    <span class="menu-icon">🛡️</span>
+                    <span class="menu-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-shield"></use></svg></span>
                     <span>Django Admin</span>
                 </a>
             </li>
@@ -710,7 +721,7 @@
             </div>
 
             <a href="{% url 'logout' %}" class="btn-sidebar-logout" title="Cerrar sesión de {{ request.user.nombre_completo }}">
-                <span style="font-size: 1.05rem;">🚪</span>
+                <svg class="ui-icon" aria-hidden="true"><use href="#icon-exit"></use></svg>
                 <span>Cerrar Sesión</span>
             </a>
         </div>
@@ -722,20 +733,33 @@
     <div class="main-wrapper">
         <!-- Top Navbar -->
         <header class="top-navbar">
+            <button type="button" id="contraer-navegacion" class="desktop-menu-toggle" aria-label="Contraer navegación" aria-controls="navegacion-principal" aria-expanded="true"><svg class="ui-icon" aria-hidden="true"><use href="#icon-menu"></use></svg></button>
+            <button type="button" id="abrir-navegacion" class="mobile-menu-button" aria-label="Abrir navegación" aria-controls="navegacion-principal" aria-expanded="false"><svg class="ui-icon" aria-hidden="true"><use href="#icon-menu"></use></svg></button>
             <div class="top-title">
-                <h2>SISTEMA INTEGRADO DE GESTIÓN OPERATIVA — EL CUMBE S.A.C.</h2>
-                <p>Prácticas Pre Profesionales (1IS101) • Universidad Señor de Sipán • RUC: 20480397731</p>
+                <nav class="workspace-breadcrumb" aria-label="Ubicación"><span>SISMOC</span><svg class="ui-icon" aria-hidden="true"><use href="#icon-arrow"></use></svg><strong id="workspace-location">Inicio</strong></nav>
             </div>
-
+            <div class="header-account">
+                {% include '_theme_toggle.html' %}
+                <span class="account-role">{{ request.user.get_rol_display }}</span>
+                <details class="account-menu">
+                    <summary aria-label="Menú de la cuenta"><span class="account-avatar">{{ request.user.nombre_completo|slice:":1"|upper }}</span></summary>
+                    <div class="account-popover">
+                        <strong>{{ request.user.nombre_completo }}</strong>
+                        <small>{{ request.user.get_rol_display }}</small>
+                        <a href="?vista=dashboard"><svg class="ui-icon" aria-hidden="true"><use href="#icon-grid"></use></svg> Ir al inicio</a>
+                        <a href="{% url 'logout' %}"><svg class="ui-icon" aria-hidden="true"><use href="#icon-exit"></use></svg> Cerrar sesión</a>
+                    </div>
+                </details>
+            </div>
         </header>
 
         <!-- Mensajes Flash de Django (Bienvenida / Avisos RBAC) -->
         {% if messages %}
             <div style="margin-bottom: 20px;">
                 {% for message in messages %}
-                    <div style="padding: 12px 18px; border-radius: 10px; font-size: 0.88rem; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; {% if message.tags == 'error' %}background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5;{% elif message.tags == 'success' %}background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #6ee7b7;{% else %}background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.4); color: #67e8f9;{% endif %}">
+                    <div class="app-alert" data-level="{{ message.level_tag }}"{% if 'welcome' in message.tags %} data-auto-dismiss="5000" role="status"{% endif %} style="padding: 12px 18px; border-radius: 10px; font-size: 0.88rem; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; {% if message.level_tag == 'error' %}background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5;{% elif message.level_tag == 'success' %}background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #6ee7b7;{% else %}background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.4); color: #67e8f9;{% endif %}">
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 1.1rem;">{% if message.tags == 'error' %}⚠️{% elif message.tags == 'success' %}✓{% else %}ℹ️{% endif %}</span>
+                            <span style="font-size: 1.1rem;">{% if message.level_tag == 'error' %}⚠️{% elif message.level_tag == 'success' %}✓{% else %}ℹ️{% endif %}</span>
                             <span>{{ message }}</span>
                         </div>
                         <button type="button" onclick="this.parentElement.style.display='none'" style="background: transparent; border: none; color: inherit; font-size: 1.2rem; cursor: pointer;">×</button>
@@ -747,48 +771,55 @@
         <!-- ===============================================================
              DASHBOARD GENERAL Y HUELLERO EN APARTADOS INDEPENDIENTES
         =============================================================== -->
-        <div id="view-dashboard" class="view-section active">
-            <div class="panel-header-custom"><div><h3 class="panel-title-text">Dashboard general</h3><p class="ayuda">Estadísticas de asistencia y operación. Los nuevos módulos incorporarán sus indicadores cuando estén disponibles.</p></div></div>
+        <div id="view-dashboard" class="view-section active" role="region" aria-label="Dashboard general">
+            <div class="dashboard-welcome"><h3>Hola, {{ request.user.first_name|default:request.user.username }}</h3><p><svg class="ui-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg> {% now "j \d\e F \d\e Y" %}</p></div>
             <form method="get" class="filtros-asistencia filtros-dashboard">
+                <div class="dashboard-filter-title"><svg class="ui-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg> Filtros del periodo</div>
                 <input type="hidden" name="vista" value="dashboard">
                 <label>Desde<input type="date" name="desde" value="{{ filtros.desde }}" required></label>
                 <label>Hasta<input type="date" name="hasta" value="{{ filtros.hasta }}" required></label>
                 <button type="submit" class="btn-cumbe">Consultar estadísticas</button>
             </form>
             {% if filtros.error %}<p class="aviso aviso-error" role="alert">{{ filtros.error }}</p>{% endif %}
+        {% if dashboard_contable %}
+            {% include 'dashboard/contabilidad.html' %}
+        {% else %}
         <p class="ayuda">Periodo de horas, jornadas y servicios: <strong>{{ filtros.desde }} al {{ filtros.hasta }}</strong>. Personal activo y marcaciones de hoy se muestran por separado.</p>
         <!-- Tarjetas KPI Resumen -->
         <div class="kpi-grid">
             <div class="kpi-box">
-                <div class="kpi-top-bar bar-orange"></div>
+                <div class="kpi-top-bar bar-orange"><svg class="ui-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg></div>
                 <div class="kpi-title">Con marcación hoy</div>
                 <div class="kpi-value" id="kpiPresentes">{{ info_huellero.total_presentes_hoy }} <span style="font-size: 1rem; color: #ffa94d;">trabajadores</span></div>
                 <div class="kpi-sub">Personas con registros guardados hoy</div>
             </div>
 
             <div class="kpi-box">
-                <div class="kpi-top-bar bar-emerald"></div>
+                <div class="kpi-top-bar bar-emerald"><svg class="ui-icon" aria-hidden="true"><use href="#icon-clock"></use></svg></div>
                 <div class="kpi-title">Horas extras del periodo</div>
                 <div class="kpi-value">{{ totales_asistencia.horas_extras_25|floatformat:2 }} <span style="font-size: 1rem; color: #34d399;">h al 25 %</span></div>
                 <div class="kpi-sub">{{ totales_asistencia.horas_extras_35|floatformat:2 }} h al 35 % · Incluye pendientes de revisión</div>
             </div>
 
             <div class="kpi-box">
-                <div class="kpi-top-bar bar-cyan"></div>
+                <div class="kpi-top-bar bar-cyan"><svg class="ui-icon" aria-hidden="true"><use href="#icon-file"></use></svg></div>
                 <div class="kpi-title">Jornadas por revisar</div>
                 <div class="kpi-value">{{ conteos_revision.PENDIENTE|add:conteos_revision.OBSERVADO }} <span style="font-size: 1rem; color: #38bdf8;">jornadas</span></div>
                 <div class="kpi-sub">{{ conteos_revision.APROBADO }} de {{ total_jornadas }} aprobadas · {{ conteos_revision.OBSERVADO }} observadas</div>
             </div>
 
             <div class="kpi-box">
-                <div class="kpi-top-bar bar-purple"></div>
+                <div class="kpi-top-bar bar-purple"><svg class="ui-icon" aria-hidden="true"><use href="#icon-users"></use></svg></div>
                 <div class="kpi-title">Personal activo registrado</div>
                 <div class="kpi-value">{{ total_usuarios }} <span style="font-size: 1rem; color: #c084fc;">activos</span></div>
                 <div class="kpi-sub">Distribuido en los 7 Roles RBAC</div>
             </div>
         </div>
 
+        {% endif %}
+        {% if not dashboard_contable %}
             {% include 'dashboard/modulos.html' %}
+        {% endif %}
         </div>
 
         <div id="view-huellero" class="view-section">
@@ -801,6 +832,12 @@
         <div id="view-asistencia" class="view-section">
             {% include "asistencia/panel.html" %}
         </div>
+
+        {% if puede_gestionar %}
+        <div id="view-contabilidad" class="view-section">
+            {% include "asistencia/contabilidad.html" %}
+        </div>
+        {% endif %}
 
         <!-- ===============================================================
              SECCION 3: CONDUCTORES & DESCANSOS SUTRAN (8h)
@@ -868,24 +905,10 @@
              SECCION 4: IMPORTADOR EXCEL ZKTECO (PANDAS)
         =============================================================== -->
         <div id="view-excel-zk" class="view-section">
-            <div class="content-panel">
-                <div class="panel-header-custom">
-                    <div class="panel-title-text">
-                        <span>📂</span>
-                        <span>Motor de Procesamiento ZKTeco con Pandas (Lectura Multi-Hoja)</span>
-                    </div>
-                </div>
-
-                <div class="excel-drop-zone" onclick="document.getElementById('excelInput').click()">
-                    <div style="font-size: 2.8rem; margin-bottom: 10px;">📊</div>
-                    <h4 style="font-family: 'Outfit', sans-serif; font-weight: 700; margin-bottom: 6px;">
-                        Subir Archivo de Asistencia ZKTeco (.xlsx / .xls)
-                    </h4>
-                    <p style="color: var(--text-muted); font-size: 0.88rem; max-width: 600px; margin: 0 auto 15px auto;">
-                        Cargue un archivo compatible con el importador. Revise los resultados antes de aprobarlos; los libros con formatos mixtos requieren validación de hojas, identidades y jornadas.
-                    </p>
-                    <button class="btn-cumbe" type="button">Seleccionar Archivo de mi PC</button>
-                    <input type="file" id="excelInput" accept=".xlsx,.xls" style="display: none;" onchange="procesarExcel(this.files[0])">
+            <div class="zk-upload-host">
+                <div class="zk-upload-control">
+                    <button class="btn-cumbe zk-upload-trigger" type="button" onclick="document.getElementById('excelInput').click()" title="Seleccionar archivo de asistencia ZKTeco (.xlsx o .xls)"><svg class="ui-icon" aria-hidden="true"><use href="#icon-file"></use></svg> Subir asistencia</button>
+                    <input type="file" id="excelInput" accept=".xlsx,.xls" hidden onchange="procesarExcel(this.files[0])">
                 </div>
 
                 <div id="resultadoExcelBox" style="margin-top: 20px; display: none;" class="content-panel">
@@ -910,7 +933,7 @@
                 <div class="row g-3">
                     <div class="col-md-6 col-lg-4">
                         <div class="kpi-box">
-                            <div class="kpi-top-bar bar-purple"></div>
+                            <div class="kpi-top-bar bar-purple"><svg class="ui-icon" aria-hidden="true"><use href="#icon-users"></use></svg></div>
                             <div style="font-size: 1.25rem; font-weight: 800; margin-bottom: 6px;">👑 Gerente General</div>
                             <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px;">
                                 Dashboard Ejecutivo, rentabilidad por ruta Chiclayo-Cajamarca-Trujillo y auditoría.
@@ -921,7 +944,7 @@
 
                     <div class="col-md-6 col-lg-4">
                         <div class="kpi-box">
-                            <div class="kpi-top-bar bar-cyan"></div>
+                            <div class="kpi-top-bar bar-cyan"><svg class="ui-icon" aria-hidden="true"><use href="#icon-file"></use></svg></div>
                             <div style="font-size: 1.25rem; font-weight: 800; margin-bottom: 6px;">⚙️ Administrador TI</div>
                             <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px;">
                                 Seguridad JWT, catálogo de buses, agencias, terminales y mantenimiento del servidor.
@@ -932,7 +955,7 @@
 
                     <div class="col-md-6 col-lg-4">
                         <div class="kpi-box">
-                            <div class="kpi-top-bar bar-emerald"></div>
+                            <div class="kpi-top-bar bar-emerald"><svg class="ui-icon" aria-hidden="true"><use href="#icon-clock"></use></svg></div>
                             <div style="font-size: 1.25rem; font-weight: 800; margin-bottom: 6px;">📊 Contadora General</div>
                             <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px;">
                                 Carga de logs ZKTeco, cálculo legal de planillas D.L. 728 y motor de conciliación BCP.
@@ -943,7 +966,7 @@
 
                     <div class="col-md-6 col-lg-4">
                         <div class="kpi-box">
-                            <div class="kpi-top-bar bar-orange"></div>
+                            <div class="kpi-top-bar bar-orange"><svg class="ui-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg></div>
                             <div style="font-size: 1.25rem; font-weight: 800; margin-bottom: 6px;">🚌 Conductor / Chofer</div>
                             <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px;">
                                 Consulta de vueltas (X/XX), GPS en ruta, peajes y validación de 8h descanso SUTRAN.
@@ -954,7 +977,7 @@
 
                     <div class="col-md-6 col-lg-4">
                         <div class="kpi-box">
-                            <div class="kpi-top-bar bar-purple"></div>
+                            <div class="kpi-top-bar bar-purple"><svg class="ui-icon" aria-hidden="true"><use href="#icon-users"></use></svg></div>
                             <div style="font-size: 1.25rem; font-weight: 800; margin-bottom: 6px;">📱 Operador de Bus</div>
                             <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px;">
                                 Escaneo QR en puerta de bus y paraderos intermedios de carretera (Modo Offline).
@@ -965,7 +988,7 @@
 
                     <div class="col-md-6 col-lg-4">
                         <div class="kpi-box">
-                            <div class="kpi-top-bar bar-cyan"></div>
+                            <div class="kpi-top-bar bar-cyan"><svg class="ui-icon" aria-hidden="true"><use href="#icon-file"></use></svg></div>
                             <div style="font-size: 1.25rem; font-weight: 800; margin-bottom: 6px;">🎟️ Vendedor Boletería</div>
                             <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px;">
                                 Venta en ventanilla, croquis interactivo de asientos, cobros en caja y emisión QR.
@@ -976,7 +999,7 @@
 
                     <div class="col-md-6 col-lg-4">
                         <div class="kpi-box">
-                            <div class="kpi-top-bar bar-emerald"></div>
+                            <div class="kpi-top-bar bar-emerald"><svg class="ui-icon" aria-hidden="true"><use href="#icon-clock"></use></svg></div>
                             <div style="font-size: 1.25rem; font-weight: 800; margin-bottom: 6px;">👔 Personal Oficina</div>
                             <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px;">
                                 Marcación de entrada/salida biométrica o app móvil, consulta de horas y tardanzas.
@@ -1004,7 +1027,7 @@
                 <div class="row g-4">
                     <div class="col-md-6">
                         <div class="kpi-box">
-                            <div class="kpi-top-bar bar-orange"></div>
+                            <div class="kpi-top-bar bar-orange"><svg class="ui-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg></div>
                             <h4 style="font-weight: 800; color: white;">Bus Suite Imperial (2 Pisos)</h4>
                             <p style="color: var(--text-muted); font-size: 0.85rem;">Placa: <strong>T4A-954</strong> • Capacidad: 54 Asientos (Piso 1: Sofá Cama 160° / Piso 2: Semicama)</p>
                             <div style="background: rgba(0,0,0,0.3); border-radius: 10px; padding: 15px; text-align: center; margin-top: 10px;">
@@ -1021,7 +1044,7 @@
 
                     <div class="col-md-6">
                         <div class="kpi-box">
-                            <div class="kpi-top-bar bar-cyan"></div>
+                            <div class="kpi-top-bar bar-cyan"><svg class="ui-icon" aria-hidden="true"><use href="#icon-file"></use></svg></div>
                             <h4 style="font-weight: 800; color: white;">Bus Ejecutivo Clásico (1 Piso)</h4>
                             <p style="color: var(--text-muted); font-size: 0.85rem;">Placa: <strong>M3B-812</strong> • Capacidad: 42 Asientos Ejecutivos • Ruta: Chiclayo - Chota</p>
                             <div style="background: rgba(0,0,0,0.3); border-radius: 10px; padding: 15px; text-align: center; margin-top: 10px;">
@@ -1112,11 +1135,11 @@
     <!-- Scripts de Interacción -->
     <script>
         function mostrarSeccion(seccionId) {
-            document.querySelectorAll('.menu-link').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.menu-link').forEach(btn => { btn.classList.remove('active'); btn.removeAttribute('aria-current'); });
             document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active'));
 
             const enlace = Array.from(document.querySelectorAll('.menu-link')).find(btn => (btn.getAttribute('onclick') || '').includes("'" + seccionId + "'"));
-            if (enlace) enlace.classList.add('active');
+            if (enlace) { enlace.classList.add('active'); enlace.setAttribute('aria-current', 'page'); const location = document.getElementById('workspace-location'); if (location) location.textContent = seccionId === 'dashboard' ? 'Inicio' : enlace.textContent.trim(); }
             const target = document.getElementById('view-' + seccionId);
             if (target) {
                 target.classList.add('active');
@@ -1202,10 +1225,11 @@
                 const data = await res.json();
                 box.textContent = 'Archivo: ' + data.archivo + '. Filas: ' + data.filas_procesadas + '. Marcas nuevas: ' + data.marcaciones_nuevas + '. Repetidas: ' + data.marcaciones_repetidas + '. Códigos guardados: ' + data.codigos_biometricos + '. Pendientes de identificar: ' + data.identidades_pendientes + '. ' + data.alertas.join(' ');
                 const enlace = document.createElement('a');
-                enlace.href = '?vista=excel-zk';
+                enlace.href = '?vista=excel-zk&grupo_carga=' + encodeURIComponent(data.carga_id);
                 enlace.textContent = ' Ver códigos guardados y asociar trabajadores';
                 enlace.style.color = '#7dd3fc';
                 box.appendChild(enlace);
+                window.location.assign(enlace.href);
             } else {
                 const error = await res.json(); box.textContent = error.detail || 'Error al procesar el archivo Excel.';
             }
@@ -1213,5 +1237,6 @@
         const vistaInicial = new URLSearchParams(window.location.search).get('vista');
         if (vistaInicial && document.getElementById('view-' + vistaInicial)) mostrarSeccion(vistaInicial);
     </script>
+    <script src="{% static 'interfaz.js' %}?v=20261019-welcome-1" defer></script>
 </body>
 </html>

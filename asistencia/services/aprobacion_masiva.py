@@ -17,6 +17,8 @@ def aprobar_jornadas_listas(jornadas, desde, hasta, actor):
             resultado["ya_aprobadas"] += 1
             continue
         motivos = list(detalle["bloqueos"])
+        if detalle['solo_situacion']:
+            motivos.insert(0, 'Seleccione la situación del día y apruébelo individualmente desde su fila.')
         if detalle["cerrada"]:
             motivos.insert(0, "El día pertenece a un periodo cerrado.")
         if resumen.estado_revision == "OBSERVADO":

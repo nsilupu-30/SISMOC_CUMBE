@@ -91,6 +91,8 @@ def detalle_jornada(resumen, *, marcas_consulta=None, incluir_formulario=True, c
         marcas_persona(resumen),
         fecha_hora__gte=inicio, fecha_hora__lte=fin,
     ).select_related("carga_origen", "correccion_evento", "identidad_biometrica", "registrada_por").order_by("fecha_hora", "pk").distinct())
+    if resumen.marcaciones_publicadas is not None:
+        marcas = [m for m in marcas if m.pk in resumen.marcaciones_publicadas]
     alertas, tramos = [], []
     entrada = refrigerio = None
     trabajo_seg = refrigerio_seg = 0
@@ -179,8 +181,25 @@ def detalle_jornada(resumen, *, marcas_consulta=None, incluir_formulario=True, c
         bloqueos.append("Complete la justificación del día no trabajado antes de aprobarlo.")
     if any(v < 0 for v in valores.values()):
         bloqueos.append("Los conceptos no pueden quedar con total negativo.")
+    from asistencia.services.propuesta_eventos import proponer_eventos
+    cerrada = cierre_confirmado if cierre_confirmado is not None else CierreAsistencia.objects.filter(fecha_inicio__lte=resumen.fecha, fecha_fin__gte=resumen.fecha).exists()
+    propuestas = {} if cerrada else proponer_eventos(resumen, marcas)
+    for marca in marcas:
+        marca.evento_seleccionado = propuestas.get(marca.pk, marca.evento_efectivo)
+    cuadro = construir_cuadro_excel(resumen, marcas, tramos, completa, turno, valores, refrigerio_seg)
+    from asistencia.services.duplicadas import pares_cercanos, ultimas_revisiones, EXCLUIR
+    cercanas = pares_cercanos(marcas)
+    exclusiones = ultimas_revisiones([m for m in marcas if not m.es_valida]) if any(not m.es_valida for m in marcas) else {}
+    for fila in cuadro['filas']:
+        fila['evento_seleccionado'] = propuestas.get(fila['marcacion_id'], fila['evento_codigo'])
+        fila['es_propuesta'] = fila['marcacion_id'] in propuestas
+        fila['posible_duplicada'] = fila['marcacion_id'] in cercanas
+        fila['excluida_duplicada'] = not fila['valida'] and exclusiones.get(fila['marcacion_id']) == EXCLUIR
     return {
         "resumen": resumen, "turno": turno, "marcas": marcas, "tramos": tramos,
+        "propuestas_eventos": propuestas,
+        "tardanza_confirmada": turno is not None and completa,
+        "estado_asistencia_visible": resumen.get_estado_display() if turno or justificada or situacion_dia else "Horario por confirmar",
         "form_marca_manual": MarcacionManualForm(resumen=resumen) if incluir_formulario else None,
         "alertas": alertas, "bloqueos": bloqueos, "completa": completa,
         "ausencia_justificada": justificada,
@@ -188,10 +207,12 @@ def detalle_jornada(resumen, *, marcas_consulta=None, incluir_formulario=True, c
         "refrigerio": duracion(refrigerio_seg) if completa else None,
         "trabajo_reconstruido": duracion(trabajo_seg) if completa else None,
         "deficit_minutos": deficit,
-        "cuadro_excel": construir_cuadro_excel(resumen, marcas, tramos, completa, turno, valores, refrigerio_seg),
+        "cuadro_excel": cuadro,
+        "filas_duplicadas": [f for f in cuadro['filas'] if f['posible_duplicada'] or f['excluida_duplicada']],
         "valores": valores, "revision": estado_revision(resumen),
-        "cerrada": cierre_confirmado if cierre_confirmado is not None else CierreAsistencia.objects.filter(fecha_inicio__lte=resumen.fecha, fecha_fin__gte=resumen.fecha).exists(),
+        "cerrada": cerrada,
         "inicio_consulta": timezone.localtime(inicio), "fin_consulta": timezone.localtime(fin),
+        "cruza_medianoche": fin.date() > inicio.date() and bool(marcas) and any(timezone.localtime(m.fecha_hora).date() > resumen.fecha for m in marcas),
     }
 
 
@@ -200,12 +221,15 @@ def duracion(segundos):
     return f"{segundos // 3600:02d}:{segundos % 3600 // 60:02d}:{segundos % 60:02d}"
 
 
-def revisar(resumen, actor, decision, motivo=""):
+def revisar(resumen, actor, decision, motivo="", *, situacion_confirmada=None):
     comprobar_abierto(resumen.fecha)
     if decision == "APROBADO":
         if not puede_aprobar(actor):
             raise ValidationError("La aprobación corresponde a Contabilidad o Gerencia.")
-        bloqueos = detalle_jornada(resumen, incluir_formulario=False)["bloqueos"]
+        detalle = detalle_jornada(resumen, incluir_formulario=False)
+        if detalle['solo_situacion'] and situacion_confirmada != detalle['situacion_dia'].tipo:
+            raise ValidationError('Seleccione la situación del día antes de aprobarlo desde su fila.')
+        bloqueos = detalle["bloqueos"]
         if bloqueos:
             raise ValidationError(bloqueos)
     elif decision == "OBSERVADO":

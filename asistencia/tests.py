@@ -304,6 +304,9 @@ class RevisionAsistenciaTests(TestCase):
         self.client.post(url, {"accion": "aprobar_incidencia", "registro_id": i.pk})
         self.client.post(url, {"accion": "APROBADO"})
         r.refresh_from_db()
+        self.assertFalse(r.verificado_contabilidad)
+        self.client.post(url, {"accion": "aprobar_dia_situacion", "tipo": "VACACIONES"})
+        r.refresh_from_db()
         self.assertEqual(r.estado, "VACACIONES")
         self.assertTrue(r.verificado_contabilidad)
         self.assertEqual(r.horas_trabajadas, 0)
@@ -332,7 +335,9 @@ class RevisionAsistenciaTests(TestCase):
         dashboard = html.split('<div id="view-dashboard"', 1)[1].split('<div id="view-huellero"', 1)[0]
         huellero = html.split('<div id="view-huellero"', 1)[1].split('<div id="view-asistencia"', 1)[0]
         self.assertIn("Dashboard general", dashboard)
-        self.assertIn("Indicadores de próximos sprints", dashboard)
+        self.assertIn("Pendientes prioritarios", dashboard)
+        self.assertIn("Trabajadores del periodo", dashboard)
+        self.assertNotIn("Indicadores de próximos sprints", dashboard)
         self.assertNotIn('id="tablaZkLive"', dashboard)
         self.assertNotIn('id="btnSync"', dashboard)
         self.assertIn('id="tablaZkLive"', huellero)

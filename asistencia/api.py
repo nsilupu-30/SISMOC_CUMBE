@@ -79,6 +79,7 @@ def registrar_marcacion(request, data: MarcacionCreateSchema):
 
     # Si hay usuario registrado, actualizar o crear el resumen diario
     if usuario:
+        from asistencia.services.horarios import turno_programado, actualizar_tardanza
         fecha_hoy = ahora.date()
         resumen_abierto = None
         if data.tipo_evento != "ENTRADA":
@@ -91,15 +92,18 @@ def registrar_marcacion(request, data: MarcacionCreateSchema):
             fecha=fecha_hoy,
             defaults={
                 "primera_entrada": ahora.time() if data.tipo_evento == "ENTRADA" else None,
-                "turno_aplicado": usuario.turno,
-                "estado": ResumenAsistenciaDiaria.EstadoAsistencia.ASISTIO,
+                "turno_aplicado": turno_programado(usuario, fecha_hoy),
+                "estado": ResumenAsistenciaDiaria.EstadoAsistencia.POR_REVISAR,
             },
         )
         if data.tipo_evento == "ENTRADA" and not resumen.primera_entrada:
             resumen.primera_entrada = ahora.time()
         if data.tipo_evento == "SALIDA":
             resumen.ultima_salida = ahora.time()
+        if resumen.marcaciones_publicadas is not None:
+            resumen.marcaciones_publicadas = [*resumen.marcaciones_publicadas, nueva_marcacion.pk]
         resumen.save()
+        actualizar_tardanza(resumen)
 
     return nueva_marcacion
 

@@ -48,8 +48,10 @@ def agregar_marcacion_manual(resumen, datos, actor):
         registrada_por=actor, motivo_manual=valores["motivo_manual"], evidencia_manual_url=valores["evidencia_manual_url"],
     )
     resumen.primera_entrada = timezone.localtime(primera).time()
+    if resumen.marcaciones_publicadas is not None:
+        resumen.marcaciones_publicadas = [*resumen.marcaciones_publicadas, marca.pk]
     resumen.ultima_salida = timezone.localtime(ultima).time() if primera != ultima else None
-    resumen.save(update_fields=["primera_entrada", "ultima_salida"])
+    resumen.save(update_fields=["primera_entrada", "ultima_salida", "marcaciones_publicadas"])
     registrar_historial(resumen, actor, "Marcación manual agregada", f"{instante.isoformat()} · {marca.get_tipo_evento_display()} · {valores['motivo_manual']}", marca)
     dejar_pendiente(resumen, actor, "Se agregó una marcación manual; requiere revisión de la jornada.")
     validar_periodo([resumen], {}, {}, None, "Recalculado tras agregar marcación manual.", actor)

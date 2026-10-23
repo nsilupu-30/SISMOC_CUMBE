@@ -53,7 +53,8 @@ def login_view(request):
             login(request, user)
             messages.success(
                 request,
-                f'Bienvenido(a), {user.first_name or user.username}! Ha ingresado con el rol: {user.get_rol_display()}.'
+                f'Bienvenido(a), {user.first_name or user.username}! Ha ingresado con el rol: {user.get_rol_display()}.',
+                extra_tags='welcome'
             )
             next_url = request.GET.get('next') or request.POST.get('next') or 'dashboard'
             return redirect(next_url)

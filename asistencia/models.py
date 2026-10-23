@@ -232,6 +232,20 @@ class Trabajador(models.Model):
         return self.area
 
 
+class ProgramacionHorario(models.Model):
+    """Turno confirmado para una fecha, exista o no una jornada importada."""
+    trabajador = models.ForeignKey(Trabajador, on_delete=models.PROTECT, related_name="programacion_horarios")
+    fecha = models.DateField()
+    turno = models.ForeignKey(TurnoHorario, on_delete=models.PROTECT)
+    motivo = models.CharField(max_length=500)
+    responsable = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    actualizado_el = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["fecha", "trabajador_id"]
+        constraints = [models.UniqueConstraint(fields=["trabajador", "fecha"], name="horario_trabajador_fecha_unico")]
+
+
 class IdentidadBiometrica(models.Model):
     sede = models.CharField(max_length=100)
     equipo = models.CharField(max_length=60, blank=True)
@@ -290,6 +304,7 @@ class ResumenAsistenciaDiaria(models.Model):
     )
     trabajador = models.ForeignKey(Trabajador, null=True, blank=True, on_delete=models.PROTECT, related_name="jornadas")
     fecha = models.DateField(db_index=True, verbose_name="Fecha de Asistencia")
+    marcaciones_publicadas = models.JSONField(null=True, blank=True, default=None, help_text="IDs de marcas enviadas desde el grupo de importación; null conserva la consulta histórica.")
     
     # Horas registradas en el día
     primera_entrada = models.TimeField(null=True, blank=True, verbose_name="Primera Entrada")

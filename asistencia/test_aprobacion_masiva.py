@@ -68,14 +68,15 @@ class AprobacionMasivaTests(TestCase):
         self.assertIn('ajustes pendientes', motivos)
         self.assertIn('observada', motivos)
 
-    def test_descanso_con_situacion_aprobada_tambien_puede_aprobarse(self):
+    def test_descanso_exige_seleccionar_situacion_individualmente(self):
         dia = self.hasta + timedelta(days=1)
         descanso = ResumenAsistenciaDiaria.objects.create(trabajador=self.ficha, fecha=dia, estado='DIA_LIBRE', horas_trabajadas=0)
         IncidenciaAsistencia.objects.create(resumen=descanso, tipo='DESCANSO_SEMANAL', motivo='Descanso programado', creado_por=self.contadora, aprobado_por=self.contadora, aprobado_el=timezone.now())
         self.client.post(self.url, {**self.datos, 'hasta': str(dia)})
         descanso.refresh_from_db()
-        self.assertTrue(descanso.verificado_contabilidad)
-        self.assertEqual(self.client.session['resultado_aprobacion_masiva']['aprobadas'], 3)
+        self.assertFalse(descanso.verificado_contabilidad)
+        self.assertEqual(self.client.session['resultado_aprobacion_masiva']['aprobadas'], 2)
+        self.assertIn('Seleccione la situación', str(self.client.session['resultado_aprobacion_masiva']['pendientes']))
 
     def test_respeta_cierre_y_no_modifica_jornadas_ajenas_al_periodo(self):
         CierreAsistencia.objects.create(fecha_inicio=self.desde, fecha_fin=self.desde, total_jornadas=1)

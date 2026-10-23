@@ -55,7 +55,7 @@ def proteger_resumen(sender, instance, **kwargs):
         original = sender.objects.filter(pk=instance.pk).first()
         if original:
             comprobar_abierto(original.fecha)
-            campos = ("usuario_id", "trabajador_id", "fecha", "primera_entrada", "ultima_salida", "horas_trabajadas", "horas_extras_25", "horas_extras_35", "horas_nocturnas", "minutos_tardanza", "turno_aplicado_id", "estado", "observaciones")
+            campos = ("usuario_id", "trabajador_id", "fecha", "primera_entrada", "ultima_salida", "horas_trabajadas", "horas_extras_25", "horas_extras_35", "horas_nocturnas", "minutos_tardanza", "turno_aplicado_id", "estado", "observaciones", "marcaciones_publicadas")
             if any(getattr(original, c) != getattr(instance, c) for c in campos):
                 sender.objects.filter(pk=instance.pk).update(verificado_contabilidad=False, estado_revision="PENDIENTE", revisado_por=None, fecha_revision=None)
                 instance.verificado_contabilidad = False

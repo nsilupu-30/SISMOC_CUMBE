@@ -34,6 +34,7 @@ def texto(valor):
 
 def asegurar_jornada(usuario, fecha):
     """Solo crea la jornada pendiente; no inventa eventos ni horas a partir de su orden."""
+    from asistencia.services.horarios import turno_programado
     qs = MarcacionBiometrica.objects.filter(usuario=usuario, fecha_hora__date=fecha, es_valida=True).order_by("fecha_hora")
     primera, ultima = qs.first(), qs.last()
     if not primera:
@@ -43,7 +44,7 @@ def asegurar_jornada(usuario, fecha):
         defaults={
             "primera_entrada": timezone.localtime(primera.fecha_hora).time(),
             "ultima_salida": timezone.localtime(ultima.fecha_hora).time() if ultima.pk != primera.pk else None,
-            "turno_aplicado": usuario.turno,
+            "turno_aplicado": turno_programado(usuario, fecha),
             "observaciones": "Marcaciones importadas. Límites de consulta tomados de primera y última marca; entrada, salida y tiempos pendientes de revisión.",
         },
     )

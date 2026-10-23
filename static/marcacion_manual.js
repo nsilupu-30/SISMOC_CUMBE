@@ -15,3 +15,17 @@
         }
     });
 })();
+
+// Ventana independiente: cancelar conserva los cambios del cuadro diario.
+(() => {
+    const dialog = document.getElementById('marcacion-manual-dialog');
+    const open = document.getElementById('abrir-marcacion-manual');
+    if (!dialog || !open) return;
+    open.addEventListener('click', () => {
+        if (!dialog.open) dialog.showModal();
+    });
+    dialog.querySelectorAll('[data-cerrar-manual]').forEach(button => {
+        button.addEventListener('click', () => dialog.close());
+    });
+    dialog.addEventListener('close', () => open.focus());
+})();

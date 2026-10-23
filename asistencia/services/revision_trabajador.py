@@ -18,7 +18,10 @@ def marcas_del_periodo(jornadas):
     consulta = Q(pk__in=[])
     for resumen in jornadas:
         inicio, fin = ventana_jornada(resumen)
-        consulta |= marcas_persona(resumen) & Q(fecha_hora__gte=inicio, fecha_hora__lte=fin)
+        propias = marcas_persona(resumen) & Q(fecha_hora__gte=inicio, fecha_hora__lte=fin)
+        if resumen.marcaciones_publicadas is not None:
+            propias &= Q(pk__in=resumen.marcaciones_publicadas)
+        consulta |= propias
     return MarcacionBiometrica.objects.filter(consulta).distinct().select_related("identidad_biometrica", "correccion_evento", "carga_origen").order_by("fecha_hora", "pk")
 
 
@@ -61,7 +64,7 @@ def dia_validado(detalle):
 
 
 def lista_para_aprobar(detalle):
-    return not detalle["bloqueos"] and not detalle["cerrada"] and not detalle["resumen"].verificado_contabilidad and detalle["resumen"].estado_revision != "OBSERVADO"
+    return not detalle["solo_situacion"] and not detalle["bloqueos"] and not detalle["cerrada"] and not detalle["resumen"].verificado_contabilidad and detalle["resumen"].estado_revision != "OBSERVADO"
 
 
 def contexto_revision(jornadas, desde=None, hasta=None):
@@ -74,6 +77,10 @@ def contexto_revision(jornadas, desde=None, hasta=None):
         marca.evento_etiqueta = dict(MarcacionBiometrica.TipoEvento.choices)[marca.evento_efectivo]
         marca.esta_cerrada = any(c.fecha_inicio <= marca.fecha_local.date() <= c.fecha_fin for c in cierres)
     detalles = detalles_en_lote(jornadas)
+    propuestas = {pk:evento for d in detalles for pk,evento in d['propuestas_eventos'].items()}
+    for marca in marcas:
+        marca.evento_seleccionado = propuestas.get(marca.pk, marca.evento_efectivo)
+        marca.es_propuesta = marca.pk in propuestas
     por_fecha = {d["resumen"].fecha: d for d in detalles}
     fecha = desde or min(por_fecha)
     fin = hasta or max(por_fecha)
@@ -123,6 +130,10 @@ def validar_periodo(jornadas, cambios, originales, turno, motivo, actor):
             completas += 1
             continue
         if turno:
+            if resumen.trabajador_id:
+                from asistencia.services.horarios import programar_horarios
+                programar_horarios(resumen.trabajador, resumen.fecha, resumen.fecha, [resumen.fecha.weekday()], turno, motivo, actor)
+                resumen.refresh_from_db()
             resumen.turno_aplicado = turno
             resumen.save(update_fields=["turno_aplicado"])
         detalle = detalle_jornada(resumen)
@@ -136,13 +147,9 @@ def validar_periodo(jornadas, cambios, originales, turno, motivo, actor):
             for campo, segundos in valores.items():
                 setattr(resumen, campo, (Decimal(str(segundos)) / Decimal(3600)).quantize(Decimal("0.01")))
             campos = list(valores)
-            if resumen.estado in {"POR_REVISAR", "ASISTIO", "TARDANZA"} and detalle["turno"] is not None:
-                programada = timezone.make_aware(datetime.combine(resumen.fecha, detalle["turno"].hora_entrada))
-                atraso = max(0, (detalle["tramos"][0]["inicio"] - programada).total_seconds())
-                resumen.minutos_tardanza = int(atraso // 60) if atraso > detalle["turno"].tolerancia_minutos * 60 else 0
-                resumen.estado = "TARDANZA" if resumen.minutos_tardanza else "ASISTIO"
-                campos.extend(["estado", "minutos_tardanza"])
             resumen.save(update_fields=campos)
+        from asistencia.services.horarios import actualizar_tardanza
+        actualizar_tardanza(resumen, detalle)
         # Clasificar no equivale a aprobar: verificar de nuevo los bloqueos.
         detalle_final = detalle_jornada(resumen)
         if detalle_final["bloqueos"]:
